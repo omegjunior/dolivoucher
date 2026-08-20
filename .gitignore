@@ -1,0 +1,145 @@
+# ----------------------------------------------------------------------
+# DoliLibriWeb — fichiers locaux, temporaires et sensibles
+# ----------------------------------------------------------------------
+
+# Systèmes d’exploitation
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# IDE et éditeurs
+.idea/
+.vscode/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+*~
+*.swp
+*.swo
+
+# Configuration locale et secrets
+.env
+.env.*
+!.env.example
+*.local.php
+config.local.php
+secrets/
+credentials/
+auth/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Composer et outils PHP
+/vendor/
+.phpunit.cache/
+.phpunit.result.cache
+.php-cs-fixer.cache
+.phpstan.cache/
+.psalm-cache/
+.phpunit.cache
+composer.phar
+
+# Couverture, rapports et résultats de tests
+/coverage/
+/build/
+/reports/
+/test-results/
+junit.xml
+clover.xml
+coverage.xml
+coverage.html
+
+# Journaux et fichiers temporaires
+*.log
+*.tmp
+*.temp
+*.cache
+*.bak
+*.old
+*.orig
+*.pid
+*.lock.tmp
+/tmp/
+/temp/
+/cache/
+/logs/
+
+# Archives et paquets générés
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Captures réseau et rétroconception brutes
+*.saz
+*.har
+*.pcap
+*.pcapng
+*.etl
+*.pml
+
+# Exports bruts susceptibles de contenir des données métier
+*.xls
+*.xlsx
+*.ods
+*.csv
+*.tsv
+
+# Charges SOAP/XML réelles ou décodées
+/forensics/
+/captures/
+/reverse-engineering/raw/
+/reverse-engineering/private/
+/docs/private/
+/tests/private/
+/tests/raw-fixtures/
+/fixtures/private/
+
+# Fichiers réels générés par iPréWeb
+UPDATEDB*.TXT
+UPDATEDB*.ZIP
+STOCK*.TXT
+STOCK*.ZIP
+*_STOCK_*.TXT
+*_STOCK_*.ZIP
+IMAGES_*.TXT
+IMAGES_*.ZIP
+Interface_iPreWeb_*.txt
+IWGESTEXE_INVENTAIRE*.csv
+
+# Répertoires locaux d’échange et de traitement
+/inbox/
+/outbox/
+/pending/
+/processed/
+/failed/
+/images/Traitées/
+/images/Traitees/
+/images/Erreurs/
+
+# Sauvegardes et exports de bases de données
+*.sql
+*.sql.gz
+*.dump
+*.dump.gz
+*.db
+*.sqlite
+*.sqlite3
+
+# Scripts d'installation SQL du module (sans données)
+!/sql/*.sql
+
+# Fichiers Dolibarr générés ou locaux
+/documents/
+/htdocs/documents/
+/conf/conf.php
+/htdocs/conf/conf.php
+
+# Artefacts ModuleBuilder
+*.back
+*.modulebuilder

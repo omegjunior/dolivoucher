@@ -1,0 +1,42 @@
+# Translation file
+
+#
+# Generic
+#
+
+# Module label 'ModuleDoliVoucherName'
+ModuleDoliVoucherName = DoliVoucher
+# Module description 'ModuleDoliVoucherDesc'
+ModuleDoliVoucherDesc = DoliVoucher description
+
+#
+# Admin page
+#
+DoliVoucherSetup = DoliVoucher setup
+Settings = Settings
+DoliVoucherSetupPage = DoliVoucher setup page
+NewSection=New section
+DOLIVOUCHER_MYPARAM1 = My param 1
+DOLIVOUCHER_MYPARAM1Tooltip = My param 1 tooltip
+DOLIVOUCHER_MYPARAM2=My param 2
+DOLIVOUCHER_MYPARAM2Tooltip=My param 2 tooltip
+
+
+#
+# About page
+#
+About = About
+DoliVoucherAbout = About DoliVoucher
+DoliVoucherAboutPage = DoliVoucher about page
+
+#
+# Sample page
+#
+DoliVoucherArea = Home DoliVoucher
+MyPageName = My page name
+
+#
+# Sample widget
+#
+MyWidget = My widget
+MyWidgetDescription = My widget description
