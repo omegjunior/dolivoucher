@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="bootstrap.php" colors="true" cacheDirectory=".phpunit.cache">
+	<testsuites>
+		<testsuite name="DoliVoucher phase 1">
+			<file>DoliVoucherMoneyTest.php</file>
+			<file>DoliVoucherContractTest.php</file>
+		</testsuite>
+	</testsuites>
+</phpunit>

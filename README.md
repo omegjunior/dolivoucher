@@ -1,96 +1,25 @@
-# DOLIVOUCHER FOR [DOLIBARR ERP & CRM](https://www.dolibarr.org)
+# DoliVoucher
 
-## Features
+DoliVoucher is a Dolibarr 22 module for managing funded voucher portfolios, serialized vouchers and their immutable operation history. Phase 1 targets PHP 8.1+, MariaDB 10.11 and XOF without modifying Dolibarr core or adding dependencies.
 
-Description of the module...
+## Concepts
 
-<!--
-![Screenshot dolivoucher](img/screenshot_dolivoucher.png?raw=true "DoliVoucher"){imgmd}
--->
+A physical support is only a carrier. A voucher is a serialized financial entitlement with its own balance. A portfolio is the funded envelope from which voucher value is reserved at activation.
 
-Other external modules are available on [Dolistore.com](https://www.dolistore.com).
+- `available_unallocated_balance`: funded money not yet reserved for a voucher; this alone can fund activation or a remainder transfer.
+- `immediately_redeemable_voucher_balance`: sum of `current_balance` for active and partially consumed vouchers; blocked vouchers are excluded from immediate use.
+- `outstanding_voucher_balance`: sum of balances for active, partially consumed and blocked vouchers; blocking never extinguishes LND's obligation.
+- `global_outstanding_balance`: unallocated balance plus outstanding voucher balance; calculated, not stored.
+- expired unreallocated balance: expired voucher balances, reported separately for audit and never credited automatically.
 
-## Translations
-
-Translations can be completed manually by editing files in the module directories under `langs`.
-
-<!--
-This module contains also a sample configuration for Transifex, under the hidden directory [.tx](.tx), so it is possible to manage translation using this service.
-
-For more information, see the [translator's documentation](https://wiki.dolibarr.org/index.php/Translator_documentation).
-
-There is a [Transifex project](https://transifex.com/projects/p/dolibarr-module-template) for this module.
--->
-
+Drafting or preparing a voucher has no financial effect. Activation reserves its face value. Consumption reduces only the voucher. Eligible cancellation restores the reservation. Expiration never restores it automatically.
 
 ## Installation
 
-Prerequisites: You must have Dolibarr ERP & CRM software installed. You can download it from [Dolistore.org](https://www.dolibarr.org).
-You can also get a ready-to-use instance in the cloud from https://saas.dolibarr.org
+Place this directory at `htdocs/custom/dolivoucher`, enable it from Dolibarr's module administration and allocate its eleven permissions. The provisional module ID is `501116` and must be reserved or replaced before public distribution.
 
+See [user documentation](docs/user.md), [developer documentation](docs/developer.md), [database schema](docs/database-schema.md), [accounting boundaries](docs/accounting-boundaries.md), and [tests](docs/tests.md).
 
-### From the ZIP file and GUI interface
+## Phase 1 boundaries
 
-If the module is a ready-to-deploy zip file, so with a name `module_xxx-version.zip` (e.g., when downloading it from a marketplace like [Dolistore](https://www.dolistore.com)),
-go to menu `Home> Setup> Modules> Deploy external module` and upload the zip file.
-
-<!--
-
-Note: If this screen tells you that there is no "custom" directory, check that your setup is correct:
-
-- In your Dolibarr installation directory, edit the `htdocs/conf/conf.php` file and check that following lines are not commented:
-
-    ```php
-    //$dolibarr_main_url_root_alt ...
-    //$dolibarr_main_document_root_alt ...
-    ```
-
-- Uncomment them if necessary (delete the leading `//`) and assign the proper value according to your Dolibarr installation
-
-    For example :
-
-    - UNIX:
-        ```php
-        $dolibarr_main_url_root_alt = '/custom';
-        $dolibarr_main_document_root_alt = '/var/www/Dolibarr/htdocs/custom';
-        ```
-
-    - Windows:
-        ```php
-        $dolibarr_main_url_root_alt = '/custom';
-        $dolibarr_main_document_root_alt = 'C:/My Web Sites/Dolibarr/htdocs/custom';
-        ```
--->
-
-<!--
-
-### From a GIT repository
-
-Clone the repository in `$dolibarr_main_document_root_alt/dolivoucher`
-
-```shell
-cd ....../custom
-git clone git@github.com:gitlogin/dolivoucher.git dolivoucher
-```
-
--->
-
-### Final steps
-
-Using your browser:
-
-  - Log into Dolibarr as a super-administrator
-  - Go to "Setup"> "Modules"
-  - You should now be able to find and enable the module
-
-
-
-## Licenses
-
-### Main code
-
-GPLv3 or (at your option) any later version. See file COPYING for more information.
-
-### Documentation
-
-All texts and readme's are licensed under [GFDL](https://www.gnu.org/licenses/fdl-1.3.en.html).
+No product, stock movement, invoice payment, discount, TakePOS integration, accounting entry, VAT decision or SYSCOHADA mapping is created.

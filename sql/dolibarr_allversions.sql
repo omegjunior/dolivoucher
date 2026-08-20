@@ -1,3 +1,3 @@
---
--- Script run when an upgrade of Dolibarr is done. Whatever is the Dolibarr version.
---
+-- DoliVoucher upgrade marker.
+-- Schema creation is split into the llx_dolivoucher_*.sql files so Dolibarr's
+-- module installer can replay it using MAIN_DB_PREFIX substitution.
