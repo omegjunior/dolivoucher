@@ -85,7 +85,7 @@ if ($id > 0 && $object->fetch($id) <= 0) accessforbidden($langs->trans('ErrorRec
 llxHeader('', $langs->trans('Voucher'), '', '', 0, 0, '', '', '', 'mod-dolivoucher page-voucher-card');
 if ($action === 'create' || ($action === 'add' && $id <= 0)) {
 	print load_fiche_titre($langs->trans('NewVoucher'), '', 'ticket');
-	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="add"><table class="border centpercent">';
+	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="add"><table class="border centpercent">';
 	$sql = 'SELECT rowid, ref, label FROM '.$db->prefix().'dolivoucher_portfolio WHERE entity='.$entity.' AND status IN (1,2) ORDER BY ref'.$db->plimit(500, 0);
 	$resql = $db->query($sql);
 	print '<tr><td class="fieldrequired">'.$langs->trans('Portfolio').'</td><td><select name="fk_portfolio" required><option value=""></option>';
