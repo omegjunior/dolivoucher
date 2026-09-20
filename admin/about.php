@@ -72,7 +72,7 @@ require_once '../lib/dolivoucher.lib.php';
 $langs->loadLangs(array("errors", "admin", "dolivoucher@dolivoucher"));
 
 // Access control
-if (!$user->admin) {
+if (!$user->admin && !$user->hasRight('dolivoucher', 'config', 'write')) {
 	accessforbidden();
 }
 

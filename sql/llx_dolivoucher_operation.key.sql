@@ -1,0 +1,10 @@
+ALTER TABLE llx_dolivoucher_operation ADD INDEX idx_dolivoucher_operation_entity_date (entity, date_operation);
+ALTER TABLE llx_dolivoucher_operation ADD INDEX idx_dolivoucher_operation_uuid (operation_uuid);
+ALTER TABLE llx_dolivoucher_operation ADD INDEX idx_dolivoucher_operation_portfolio (fk_portfolio);
+ALTER TABLE llx_dolivoucher_operation ADD INDEX idx_dolivoucher_operation_voucher (fk_voucher);
+ALTER TABLE llx_dolivoucher_operation ADD INDEX idx_dolivoucher_operation_type (operation_type);
+ALTER TABLE llx_dolivoucher_operation ADD INDEX idx_dolivoucher_operation_external_ref (external_ref);
+ALTER TABLE llx_dolivoucher_operation ADD UNIQUE INDEX uk_dolivoucher_operation_reversal (reversal_of);
+ALTER TABLE llx_dolivoucher_operation ADD CONSTRAINT fk_dolivoucher_operation_portfolio FOREIGN KEY (fk_portfolio) REFERENCES llx_dolivoucher_portfolio(rowid);
+ALTER TABLE llx_dolivoucher_operation ADD CONSTRAINT fk_dolivoucher_operation_voucher FOREIGN KEY (fk_voucher) REFERENCES llx_dolivoucher_voucher(rowid);
+ALTER TABLE llx_dolivoucher_operation ADD CONSTRAINT fk_dolivoucher_operation_reversal FOREIGN KEY (reversal_of) REFERENCES llx_dolivoucher_operation(rowid);

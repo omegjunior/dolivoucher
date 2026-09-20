@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS llx_dolivoucher_operation (
+	rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+	entity INTEGER DEFAULT 1 NOT NULL,
+	operation_uuid CHAR(36) NOT NULL,
+	fk_portfolio INTEGER NOT NULL,
+	fk_voucher INTEGER NULL,
+	operation_type VARCHAR(32) NOT NULL,
+	amount DECIMAL(24,8) NOT NULL,
+	balance_before DECIMAL(24,8) NULL,
+	balance_after DECIMAL(24,8) NULL,
+	source_portfolio_id INTEGER NULL,
+	destination_portfolio_id INTEGER NULL,
+	object_type VARCHAR(64) NULL,
+	fk_object INTEGER NULL,
+	external_ref VARCHAR(128) NULL,
+	reason TEXT NULL,
+	date_operation DATETIME NOT NULL,
+	date_creation DATETIME NOT NULL,
+	fk_user_creat INTEGER NOT NULL,
+	reversal_of INTEGER NULL,
+	import_key VARCHAR(14) NULL
+) ENGINE=innodb;

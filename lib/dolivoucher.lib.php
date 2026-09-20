@@ -83,3 +83,54 @@ function dolivoucherAdminPrepareHead()
 
 	return $head;
 }
+
+/** @return array<int,string> */
+function dolivoucherPortfolioStatuses()
+{
+	return array(0 => 'Draft', 1 => 'Validated', 2 => 'Active', 3 => 'Closed', 9 => 'Canceled');
+}
+
+/** @return array<int,string> */
+function dolivoucherVoucherStatuses()
+{
+	return array(0 => 'Draft', 1 => 'Prepared', 2 => 'Active', 3 => 'PartiallyConsumed', 4 => 'Consumed', 6 => 'Blocked', 9 => 'Canceled', 10 => 'Expired');
+}
+
+function dolivoucherStatusLabel($status, $voucher = false)
+{
+	global $langs;
+	$statuses = $voucher ? dolivoucherVoucherStatuses() : dolivoucherPortfolioStatuses();
+	$key = $statuses[(int) $status] ?? 'Unknown';
+	return $langs->trans($key);
+}
+
+/** Render the immutable operation history for one scope. */
+function dolivoucherPrintOperations(DoliDB $db, $entity, $portfolioId = 0, $voucherId = 0, $limit = 100)
+{
+	global $langs;
+	$sql = 'SELECT rowid, operation_uuid, operation_type, amount, balance_before, balance_after, reason, date_operation, reversal_of';
+	$sql .= ' FROM '.$db->prefix().'dolivoucher_operation WHERE entity='.(int) $entity;
+	if ((int) $voucherId > 0) {
+		$sql .= ' AND fk_voucher='.(int) $voucherId;
+	} elseif ((int) $portfolioId > 0) {
+		$sql .= ' AND fk_portfolio='.(int) $portfolioId;
+	}
+	$sql .= ' ORDER BY date_operation DESC, rowid DESC'.$db->plimit(max(1, min((int) $limit, 500)), 0);
+	$resql = $db->query($sql);
+	print '<div class="div-table-responsive"><table class="noborder centpercent">';
+	print '<tr class="liste_titre"><th>'.$langs->trans('OperationDate').'</th><th>'.$langs->trans('OperationType').'</th><th class="right">'.$langs->trans('Amount').'</th><th class="right">'.$langs->trans('BalanceBefore').'</th><th class="right">'.$langs->trans('BalanceAfter').'</th><th>'.$langs->trans('Reason').'</th></tr>';
+	$found = false;
+	while ($resql && ($row = $db->fetch_object($resql))) {
+		$found = true;
+		print '<tr class="oddeven"><td>'.dol_print_date($db->jdate($row->date_operation), 'dayhour').'</td>';
+		print '<td>'.dol_escape_htmltag($langs->trans('Operation'.$row->operation_type)).($row->reversal_of ? ' #'.(int) $row->reversal_of : '').'</td>';
+		print '<td class="right">'.price($row->amount, 0, $langs, 1, -1, -1, 'XOF').'</td>';
+		print '<td class="right">'.($row->balance_before === null ? '' : price($row->balance_before, 0, $langs, 1, -1, -1, 'XOF')).'</td>';
+		print '<td class="right">'.($row->balance_after === null ? '' : price($row->balance_after, 0, $langs, 1, -1, -1, 'XOF')).'</td>';
+		print '<td>'.dol_escape_htmltag((string) $row->reason).'</td></tr>';
+	}
+	if (!$found) {
+		print '<tr class="oddeven"><td colspan="6" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+	}
+	print '</table></div>';
+}

@@ -1,42 +1,141 @@
-# Translation file
-
-#
-# Generic
-#
-
-# Module label 'ModuleDoliVoucherName'
-ModuleDoliVoucherName = DoliVoucher
-# Module description 'ModuleDoliVoucherDesc'
-ModuleDoliVoucherDesc = DoliVoucher description
-
-#
-# Admin page
-#
-DoliVoucherSetup = DoliVoucher setup
-Settings = Settings
-DoliVoucherSetupPage = DoliVoucher setup page
-NewSection=New section
-DOLIVOUCHER_MYPARAM1 = My param 1
-DOLIVOUCHER_MYPARAM1Tooltip = My param 1 tooltip
-DOLIVOUCHER_MYPARAM2=My param 2
-DOLIVOUCHER_MYPARAM2Tooltip=My param 2 tooltip
-
-
-#
-# About page
-#
-About = About
-DoliVoucherAbout = About DoliVoucher
-DoliVoucherAboutPage = DoliVoucher about page
-
-#
-# Sample page
-#
-DoliVoucherArea = Home DoliVoucher
-MyPageName = My page name
-
-#
-# Sample widget
-#
-MyWidget = My widget
-MyWidgetDescription = My widget description
+ModuleDoliVoucherName=DoliVoucher
+ModuleDoliVoucherDesc=Voucher portfolio management
+DoliVoucherDescription=Auditable voucher portfolios with exact balances and multi-entity isolation.
+DoliVoucherArea=DoliVoucher home
+GiftVouchers=Gift vouchers
+Portfolio=Portfolio
+Portfolios=Portfolios
+NewPortfolio=New portfolio
+EditPortfolio=Edit portfolio
+Voucher=Voucher
+Vouchers=Vouchers
+NewVoucher=New voucher
+EditVoucher=Edit voucher
+OperationJournal=Operation journal
+Operations=Operations
+UsableVouchers=Usable vouchers
+DoliVoucherSetup=DoliVoucher setup
+NoPhaseOneSetting=Phase 1 has no configurable business rule.
+Institutional=Institutional
+Donation=Donation
+FundingThirdParty=Funding third party
+Period=Period
+AvailableUnallocatedBalance=Unallocated available balance
+GlobalOutstandingBalance=Global portfolio outstanding balance
+TotalFunding=Total funding recorded
+IncomingRemainders=Incoming remainders
+OutgoingRemainders=Outgoing remainders
+ActivatedVoucherValue=Initial value of activated vouchers
+ConsumedAmount=Consumed amount
+ImmediatelyRedeemableVoucherBalance=Immediately redeemable voucher balance
+BlockedVoucherBalance=Blocked voucher balance still outstanding
+ExpiredUnreallocatedBalance=Expired balance not reallocated
+OutstandingVoucherBalance=Outstanding unsettled voucher balance
+VoucherCount=Total vouchers
+ActiveVoucherCount=Active vouchers
+ConsumedVoucherCount=Consumed vouchers
+FundingType=Funding type
+NewFunding=New funding
+CarryoverContribution=Prior-period remainder contribution
+ConfirmFunding=Confirm funding
+TransferRemainder=Transfer remainder
+DestinationPortfolio=Destination portfolio
+ConfirmTransfer=Confirm transfer
+SerialNumber=Serial number
+Barcode=Barcode
+InitialAmount=Initial amount
+CurrentBalance=Current balance
+Beneficiary=Beneficiary
+IssueDate=Issue date
+ActivationDate=Activation date
+ExpirationDate=Expiration date
+Prepared=Prepared
+PartiallyConsumed=Partially consumed
+Consumed=Consumed
+Blocked=Blocked
+Expired=Expired
+ManualConsumption=Manual consumption
+ConfirmConsumption=Confirm consumption
+Block=Block
+Unblock=Unblock
+RecordExpiration=Record expiration
+AdministrativeCompensation=Administrative compensation
+ConsumptionOperationId=Consumption operation ID
+ConfirmCompensation=Confirm compensation
+ExternalRef=External reference
+OperationUuid=Operation UUID
+OperationType=Operation type
+OperationDate=Operation date
+BalanceBefore=Balance before
+BalanceAfter=Balance after
+SourcePortfolio=Source portfolio
+ReversalOf=Reversal of
+WithBalance=With a balance
+ConfirmAction=Please confirm this operation.
+ManualCancellation=Manual cancellation
+ExpirationRecorded=Expiration recorded
+OperationFUND_NEW=New funding
+OperationCARRYOVER_IN=Remainder contribution
+OperationISSUE=Issue / preparation
+OperationACTIVATE=Activation
+OperationCONSUME=Consumption
+OperationBLOCK=Block
+OperationUNBLOCK=Unblock
+OperationCANCEL=Cancellation
+OperationEXPIRE=Expiration
+OperationTRANSFER_OUT=Outgoing transfer
+OperationTRANSFER_IN=Incoming transfer
+OperationCORRECTION=Compensating correction
+DoliVoucherPermissionRead=View portfolios and vouchers
+DoliVoucherPermissionPortfolioWrite=Create or edit a draft portfolio
+DoliVoucherPermissionPortfolioValidate=Validate, activate and fund a portfolio
+DoliVoucherPermissionVoucherWrite=Create, prepare and activate vouchers
+DoliVoucherPermissionConsume=Record voucher consumption
+DoliVoucherPermissionBlock=Block or unblock a voucher
+DoliVoucherPermissionCancel=Cancel an unused voucher
+DoliVoucherPermissionTransfer=Transfer an unallocated remainder
+DoliVoucherPermissionCompensate=Perform an administrative compensation
+DoliVoucherPermissionAuditRead=View the audit journal
+DoliVoucherPermissionConfigure=Configure DoliVoucher
+ErrorInvalidPortfolioType=Invalid portfolio type.
+ErrorInvalidPortfolioDates=The portfolio end date cannot precede its start date.
+ErrorInstitutionalThirdPartyRequired=An institutional portfolio requires a funding third party.
+ErrorInvalidFundingThirdParty=The funding third party is invalid or unavailable in this entity.
+ErrorValidatedPortfolioIdentityLocked=A validated portfolio cannot change type or funding third party.
+ErrorPortfolioHasHistory=A portfolio with vouchers or journal entries cannot be deleted.
+ErrorAmountMustBePositive=The amount must be strictly positive with at most eight decimal places.
+ErrorPortfolioNotEligible=The portfolio must be validated or active in the current entity.
+ErrorActivatedVoucherImmutable=Financial fields of an activated voucher cannot be edited.
+ErrorVoucherDeletionForbidden=An activated voucher cannot be physically deleted.
+ErrorVoucherHasHistory=A voucher with journal history cannot be physically deleted.
+ErrorAppendOnlyOperation=Journal entries are append-only and cannot be created, changed or deleted through the object API.
+ErrorInvalidStatusTransition=This status transition is not allowed.
+ErrorOnlyDraftPortfolioCanBeCanceled=Only a draft portfolio can be canceled.
+ErrorPortfolioHasVouchers=This portfolio already has vouchers.
+ErrorVoucherCreationFailed=Voucher creation failed.
+ErrorVoucherNotActivatable=This voucher cannot be activated.
+ErrorInsufficientUnallocatedBalance=The portfolio does not have enough unallocated balance.
+ErrorPortfolioBalanceUpdateFailed=The portfolio balance could not be updated.
+ErrorVoucherActivationFailed=Voucher activation failed.
+ErrorVoucherNotConsumable=This voucher cannot be consumed in its current state.
+ErrorVoucherExpired=This voucher is expired.
+ErrorInsufficientVoucherBalance=The voucher balance is insufficient.
+ErrorVoucherConsumptionFailed=Voucher consumption failed.
+ErrorVoucherNotExpired=Expiration cannot be recorded yet.
+ErrorVoucherNotCancelable=This voucher cannot be canceled.
+ErrorConsumedVoucherCannotBeCanceled=A voucher that has ever been consumed cannot be canceled.
+ErrorVoucherCancellationFailed=Voucher cancellation failed.
+ErrorTransferSamePortfolio=Source and destination portfolios must differ.
+ErrorTransferPortfolioStatus=The source or destination portfolio status forbids this transfer.
+ErrorTransferIncompatiblePortfolios=Portfolios must have the same type and institutional funding third party.
+ErrorTransferDebitFailed=The outgoing transfer could not be recorded.
+ErrorTransferCreditFailed=The incoming transfer could not be recorded.
+ErrorOperationNotCompensable=Only a consumption is compensable in phase 1.
+ErrorOperationAlreadyCompensated=This operation has already been compensated.
+ErrorCompensationWouldInvalidateVoucher=The compensation would create an invalid voucher balance or status.
+ErrorCompensationFailed=The compensation failed.
+ErrorJournalAppendFailed=The audit entry could not be appended.
+ErrorRecordNotFound=The requested record does not exist in the current entity.
+ErrorPortfolioCreationFailed=Portfolio creation failed.
+ErrorBalanceReconciliation=Balance mismatch: materialized %s; journal %s. No automatic correction was made.
+ErrorExposureReconciliation=Voucher exposure reporting differs from journal reconstruction. No automatic correction was made.

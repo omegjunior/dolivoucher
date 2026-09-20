@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS llx_dolivoucher_portfolio (
+	rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+	entity INTEGER DEFAULT 1 NOT NULL,
+	ref VARCHAR(128) NOT NULL,
+	label VARCHAR(255) NOT NULL,
+	type VARCHAR(32) NOT NULL,
+	fk_soc INTEGER NULL,
+	period_label VARCHAR(128) NULL,
+	date_start DATE NULL,
+	date_end DATE NULL,
+	status INTEGER DEFAULT 0 NOT NULL,
+	available_unallocated_balance DECIMAL(24,8) DEFAULT 0 NOT NULL,
+	description TEXT NULL,
+	note_public TEXT NULL,
+	note_private TEXT NULL,
+	date_creation DATETIME NOT NULL,
+	tms TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	fk_user_creat INTEGER NOT NULL,
+	fk_user_modif INTEGER NULL,
+	import_key VARCHAR(14) NULL
+) ENGINE=innodb;
