@@ -25,8 +25,8 @@ class DoliVoucherPortfolio extends CommonObject
 	public $fields = array(
 		'rowid' => array('type' => 'integer', 'label' => 'Id', 'notnull' => 1, 'visible' => -2),
 		'entity' => array('type' => 'integer', 'label' => 'Entity', 'notnull' => 1, 'visible' => -2),
-		'ref' => array('type' => 'varchar(128)', 'label' => 'Ref', 'notnull' => 1, 'visible' => 1, 'index' => 1),
-		'label' => array('type' => 'varchar(255)', 'label' => 'Label', 'notnull' => 1, 'visible' => 1),
+		'ref' => array('type' => 'varchar(128)', 'label' => 'Ref', 'notnull' => 1, 'visible' => 1, 'index' => 1, 'showoncombobox' => 1),
+		'label' => array('type' => 'varchar(255)', 'label' => 'Label', 'notnull' => 1, 'visible' => 1, 'showoncombobox' => 2),
 		'type' => array('type' => 'varchar(32)', 'label' => 'Type', 'notnull' => 1, 'visible' => 1),
 		'fk_soc' => array('type' => 'integer:Societe:societe/class/societe.class.php', 'label' => 'FundingThirdParty', 'visible' => 1),
 		'period_label' => array('type' => 'varchar(128)', 'label' => 'Period', 'visible' => 1),

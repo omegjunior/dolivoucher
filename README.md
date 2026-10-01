@@ -16,7 +16,15 @@ Drafting or preparing a voucher has no financial effect. Activation reserves its
 
 ## Installation
 
-Place this directory at `htdocs/custom/dolivoucher`, enable it from Dolibarr's module administration and allocate its eleven permissions. The provisional module ID is `501116` and must be reserved or replaced before public distribution.
+Prerequisites: You must have Dolibarr ERP & CRM software installed. You can download it from [Dolistore.org](https://www.dolibarr.org). You can also get a ready-to-use instance in the cloud from <https://saas.dolibarr.org>.
+
+Place this directory at `htdocs/custom/dolivoucher`, then:
+
+1. Log into Dolibarr as a super-administrator.
+2. Go to **Setup > Modules**.
+3. Enable DoliVoucher and allocate its eleven permissions.
+
+The provisional module ID is `501116` and must be reserved or replaced before public distribution.
 
 See [user documentation](docs/user.md), [developer documentation](docs/developer.md), [database schema](docs/database-schema.md), [accounting boundaries](docs/accounting-boundaries.md), and [tests](docs/tests.md).
 
