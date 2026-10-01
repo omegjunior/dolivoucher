@@ -143,8 +143,16 @@ final class DoliVoucherContractTest extends TestCase
 			self::assertStringContainsString('class="tagtable liste"', $contents, $page);
 			self::assertStringContainsString('print_liste_field_titre(', $contents, $page);
 			self::assertStringContainsString('class="liste_titre button_search"', $contents, $page);
-			self::assertStringContainsString('class="liste_titre button_removefilter"', $contents, $page);
+			self::assertStringContainsString('class="liste_titre button_removefilter', $contents, $page);
 			self::assertStringContainsString("GETPOST('button_removefilter_x', 'alpha')", $contents, $page);
+		}
+		foreach (array('portfolio_list.php', 'voucher_list.php') as $page) {
+			$contents = $this->read($page);
+			self::assertStringContainsString("include DOL_DOCUMENT_ROOT.'/core/actions_changeselectedfields.inc.php'", $contents, $page);
+			self::assertStringContainsString("multiSelectArrayWithCheckbox('selectedfields', \$arrayfields, \$contextpage)", $contents, $page);
+			self::assertStringContainsString('$db->plimit($limit + 1, $offset)', $contents, $page);
+			self::assertStringContainsString('$num = $resql ? $db->num_rows($resql) : 0;', $contents, $page);
+			self::assertMatchesRegularExpression('/print_barre_liste\([^;]*\$num[^;]*\$limit\);/', $contents, $page);
 		}
 
 		$portfolioCard = $this->read('portfolio_card.php');
@@ -158,8 +166,51 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("trans('ConfirmFunding')", $portfolioCard);
 		self::assertStringContainsString("selectDate(-1, 'date_expiration'", $voucherCard);
 		self::assertStringContainsString("selectDate(\$object->date_expiration ?: -1, 'date_expiration'", $voucherCard);
+		self::assertSame(2, substr_count($voucherCard, "selectForForms(\$portfolioSelectDescriptor, 'fk_portfolio'"));
+		self::assertStringContainsString('(status:IN:1,2) AND (entity:=:__ENTITY__)', $voucherCard);
+		self::assertStringNotContainsString('<select name="fk_portfolio"', $voucherCard);
 		self::assertStringNotContainsString('type="datetime-local"', $voucherCard);
 		self::assertStringContainsString('<input type="submit" class="button button-save" value="', $voucherCard);
+		self::assertStringContainsString("action=activate&token='.newToken()", $voucherCard);
+		self::assertStringContainsString("action=activate&token='.newToken()", $portfolioCard);
+		self::assertStringNotContainsString("str_starts_with(\$action, 'confirm_')", $voucherCard);
+		self::assertStringNotContainsString("str_starts_with(\$action, 'confirm_')", $portfolioCard);
+		foreach (array('ask_consume', 'ask_block', 'ask_compensate', 'confirm_consume', 'confirm_block', 'confirm_unblock', 'confirm_compensate') as $confirmedAction) {
+			self::assertStringContainsString($confirmedAction, $voucherCard);
+		}
+		foreach (array('ask_fund', 'ask_transfer', 'confirm_fund', 'confirm_transfer') as $confirmedAction) {
+			self::assertStringContainsString($confirmedAction, $portfolioCard);
+		}
+		self::assertGreaterThanOrEqual(4, substr_count($voucherCard, '->formconfirm('));
+		self::assertGreaterThanOrEqual(3, substr_count($portfolioCard, '->formconfirm('));
+		self::assertGreaterThanOrEqual(4, substr_count($voucherCard, "GETPOST('confirm', 'alpha') === 'yes'"));
+		self::assertGreaterThanOrEqual(3, substr_count($portfolioCard, "GETPOST('confirm', 'alpha') === 'yes'"));
+		self::assertStringContainsString("'PortfolioActivatedSuccessfully'", $portfolioCard);
+		self::assertStringContainsString("'VoucherActivatedSuccessfully'", $voucherCard);
+		self::assertStringContainsString('PortfolioActivatedSuccessfully=Le portefeuille a été activé avec succès.', $this->read('langs/fr_FR/dolivoucher.lang'));
+		self::assertStringContainsString("VoucherActivatedSuccessfully=Le bon d'achat a été activé avec succès.", $this->read('langs/fr_FR/dolivoucher.lang'));
+		self::assertSame(3, substr_count($voucherCard, '<a class="butAction" href="#" onclick="this.closest(\\\'form\\\').requestSubmit(); return false;">'));
+		self::assertStringNotContainsString("<button class=\"button\">'.\$langs->trans('ConfirmConsumption')", $voucherCard);
+		self::assertStringNotContainsString("<button class=\"button\">'.\$langs->trans('ConfirmCompensation')", $voucherCard);
+		self::assertSame(3, substr_count($voucherCard, '<td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction"'));
+		self::assertStringContainsString("requestSubmit(); return false;\">'.\$langs->trans('ConfirmTransfer')", $portfolioCard);
+		self::assertStringNotContainsString("<button class=\"button\">'.\$langs->trans('ConfirmTransfer')", $portfolioCard);
+
+		$portfolioList = $this->read('portfolio_list.php');
+		self::assertStringContainsString("selectarray('search_type', \$portfolioTypeOptions", $portfolioList);
+		self::assertStringContainsString("selectarray('search_status', \$portfolioStatusOptions", $portfolioList);
+		self::assertStringContainsString("\$searchType = \$searchType === '-1' ? '' : \$searchType;", $portfolioList);
+		self::assertStringContainsString("\$searchStatus = ((int) \$searchStatus === -1) ? '' : \$searchStatus;", $portfolioList);
+
+		$voucherList = $this->read('voucher_list.php');
+		self::assertStringContainsString("selectarray('search_status', \$voucherStatusOptions", $voucherList);
+		self::assertStringContainsString("\$searchStatus = ((int) \$searchStatus === -1) ? '' : \$searchStatus;", $voucherList);
+		self::assertStringContainsString('name="search_balance"', $voucherList);
+		self::assertStringContainsString("natural_search('v.current_balance', \$searchBalance, 1)", $voucherList);
+		self::assertStringContainsString("if (\$withBalance) \$sql .= ' AND v.current_balance>0';", $voucherList);
+		self::assertStringContainsString("selectDate(\$searchExpirationDate ?: -1, 'search_expiration_date'", $voucherList);
+		self::assertStringContainsString('v.date_expiration', $voucherList);
+		self::assertStringNotContainsString('type="date"', $voucherList);
 
 		$operationList = $this->read('operation_list.php');
 		self::assertStringContainsString("selectDate(\$dateFrom ?: -1, 'date_from'", $operationList);

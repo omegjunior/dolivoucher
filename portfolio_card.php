@@ -32,7 +32,7 @@ $fundingTypeOptions = array(
 	'FUND_NEW' => $langs->trans('NewFunding'),
 	'CARRYOVER_IN' => $langs->trans('CarryoverContribution'),
 );
-$mutationActions = array('add', 'update', 'confirm_validate', 'confirm_activate', 'confirm_close', 'confirm_cancel', 'fund', 'transfer');
+$mutationActions = array('add', 'update', 'confirm_validate', 'confirm_activate', 'confirm_close', 'confirm_cancel', 'confirm_fund', 'confirm_transfer');
 if (in_array($action, $mutationActions, true) && (!GETPOST('token', 'alpha') || !hash_equals(currentToken(), GETPOST('token', 'alpha')))) {
 	accessforbidden('Bad token');
 }
@@ -69,7 +69,7 @@ if ($action === 'add') {
 	$object->description = GETPOST('description', 'restricthtml');
 	if ($object->update($user) > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
 	else setEventMessages($langs->trans($object->error ?: 'ErrorPortfolioUpdateFailed'), null, 'errors');
-} elseif ($id > 0 && str_starts_with($action, 'confirm_')) {
+} elseif ($id > 0 && in_array($action, array('confirm_validate', 'confirm_activate', 'confirm_close', 'confirm_cancel'), true) && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'portfolio', 'validate')) {
 		accessforbidden();
 	}
@@ -78,8 +78,11 @@ if ($action === 'add') {
 	if ($action === 'confirm_activate') $result = $service->activatePortfolio($id, $entity, $user);
 	if ($action === 'confirm_close') $result = $service->closePortfolio($id, $entity, $user);
 	if ($action === 'confirm_cancel') $result = $service->cancelPortfolio($id, $entity, $user);
-	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-} elseif ($id > 0 && $action === 'fund') {
+	if ($result > 0) {
+		$successMessage = $action === 'confirm_activate' ? 'PortfolioActivatedSuccessfully' : 'OperationSuccessful';
+		setEventMessages($langs->trans($successMessage), null, 'mesgs');
+	}
+} elseif ($id > 0 && $action === 'confirm_fund' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'portfolio', 'validate')) {
 		accessforbidden();
 	}
@@ -88,7 +91,7 @@ if ($action === 'add') {
 		? $service->addCarryover($id, $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'), GETPOST('external_ref', 'alphanohtml'))
 		: $service->fundPortfolio($id, $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'), GETPOST('external_ref', 'alphanohtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-} elseif ($id > 0 && $action === 'transfer') {
+} elseif ($id > 0 && $action === 'confirm_transfer' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'transfer', 'write')) {
 		accessforbidden();
 	}
@@ -171,19 +174,36 @@ $confirmActions = array('validate' => 'Validate', 'activate' => 'Activate', 'clo
 if (isset($confirmActions[$action])) {
 	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans($confirmActions[$action]), $langs->trans('ConfirmAction'), 'confirm_'.$action, '', 0, 1);
 }
+if ($action === 'ask_fund') {
+	$formQuestions = array(
+		array('type' => 'hidden', 'name' => 'funding_type', 'value' => GETPOST('funding_type', 'alpha')),
+		array('type' => 'hidden', 'name' => 'amount', 'value' => GETPOST('amount', 'alphanohtml')),
+		array('type' => 'hidden', 'name' => 'external_ref', 'value' => GETPOST('external_ref', 'alphanohtml')),
+		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
+	);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmFunding'), $langs->trans('ConfirmAction'), 'confirm_fund', $formQuestions, 0, 1);
+}
+if ($action === 'ask_transfer') {
+	$formQuestions = array(
+		array('type' => 'hidden', 'name' => 'destination_id', 'value' => GETPOSTINT('destination_id')),
+		array('type' => 'hidden', 'name' => 'amount', 'value' => GETPOST('amount', 'alphanohtml')),
+		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
+	);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmTransfer'), $langs->trans('ConfirmAction'), 'confirm_transfer', $formQuestions, 0, 1);
+}
 print '<div class="tabsAction">';
 if ($user->hasRight('dolivoucher', 'portfolio', 'write') && (int) $object->status === DoliVoucherPortfolio::STATUS_DRAFT) print '<a class="butAction" href="?id='.(int) $object->id.'&action=edit">'.$langs->trans('Modify').'</a>';
 if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && (int) $object->status === DoliVoucherPortfolio::STATUS_DRAFT) {
-	print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=validate">'.$langs->trans('Validate').'</a>';
-	print '<a class="butActionDelete" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=cancel">'.$langs->trans('Cancel').'</a>';
+	print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=validate&token='.newToken().'">'.$langs->trans('Validate').'</a>';
+	print '<a class="butActionDelete" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=cancel&token='.newToken().'">'.$langs->trans('Cancel').'</a>';
 }
-if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && (int) $object->status === DoliVoucherPortfolio::STATUS_VALIDATED) print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=activate">'.$langs->trans('Activate').'</a>';
-if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && in_array((int) $object->status, array(1,2), true)) print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=close">'.$langs->trans('Close').'</a>';
+if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && (int) $object->status === DoliVoucherPortfolio::STATUS_VALIDATED) print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=activate&token='.newToken().'">'.$langs->trans('Activate').'</a>';
+if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && in_array((int) $object->status, array(1,2), true)) print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=close&token='.newToken().'">'.$langs->trans('Close').'</a>';
 if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(1,2), true)) print '<a class="butAction" href="voucher_card.php?action=create&fk_portfolio='.(int) $object->id.'">'.$langs->trans('NewVoucher').'</a>';
 print '</div>';
 
 if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && in_array((int) $object->status, array(1,2), true)) {
-	print '<br><form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="fund"><input type="hidden" name="id" value="'.(int) $object->id.'">';
+	print '<br><form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="ask_fund"><input type="hidden" name="id" value="'.(int) $object->id.'">';
 	print '<table class="border centpercent"><tr><td>'.$langs->trans('FundingType').'</td><td>'.$form->selectarray('funding_type', $fundingTypeOptions, 'FUND_NEW', 0, 0, 0, '', 0, 0, 0, '', 'minwidth200').'</td><td><input name="amount" required placeholder="0.00"></td><td><input name="external_ref" placeholder="'.$langs->trans('ExternalRef').'"></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="center"><input type="submit" class="button button-save" value="'.$langs->trans('ConfirmFunding').'"></td></tr></table></form>';
 }
 if ($user->hasRight('dolivoucher', 'transfer', 'write') && in_array((int) $object->status, array(1,2,3), true) && DoliVoucherMoney::compare((string) $object->available_unallocated_balance, '0') > 0) {
@@ -193,8 +213,8 @@ if ($user->hasRight('dolivoucher', 'transfer', 'write') && in_array((int) $objec
 	while ($resqlDestinations && ($destination = $db->fetch_object($resqlDestinations))) {
 		$destinationOptions[(int) $destination->rowid] = $destination->ref.' - '.$destination->label;
 	}
-	print '<br><form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="transfer"><input type="hidden" name="id" value="'.(int) $object->id.'">';
-	print '<table class="border centpercent"><tr><td>'.$langs->trans('TransferRemainder').'</td><td>'.$form->selectarray('destination_id', $destinationOptions, 0, $langs->trans('DestinationPortfolio'), 0, 0, '', 0, 0, 0, '', 'minwidth300').'</td><td><input name="amount" required placeholder="0.00"></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td><button class="button">'.$langs->trans('ConfirmTransfer').'</button></td></tr></table></form>';
+	print '<br><form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="ask_transfer"><input type="hidden" name="id" value="'.(int) $object->id.'">';
+	print '<table class="border centpercent"><tr><td>'.$langs->trans('TransferRemainder').'</td><td>'.$form->selectarray('destination_id', $destinationOptions, 0, $langs->trans('DestinationPortfolio'), 0, 0, '', 0, 0, 0, '', 'minwidth300').'</td><td><input name="amount" required placeholder="0.00"></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction" href="#" onclick="this.closest(\'form\').requestSubmit(); return false;">'.$langs->trans('ConfirmTransfer').'</a></div></td></tr></table></form>';
 }
 print '<br>'.load_fiche_titre($langs->trans('OperationJournal'), '', 'list');
 dolivoucherPrintOperations($db, $entity, (int) $object->id);

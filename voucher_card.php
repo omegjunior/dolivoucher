@@ -18,7 +18,8 @@ $entity = (int) $conf->entity;
 $object = new DoliVoucherVoucher($db);
 $service = new DoliVoucherService($db);
 $form = new Form($db);
-$mutationActions = array('add', 'update', 'confirm_prepare', 'confirm_activate', 'confirm_cancel', 'confirm_expire', 'consume', 'block', 'unblock', 'compensate');
+$portfolioSelectDescriptor = 'DoliVoucherPortfolio:/dolivoucher/class/dolivoucherportfolio.class.php:0:((status:IN:1,2) AND (entity:=:__ENTITY__)):ref';
+$mutationActions = array('add', 'update', 'confirm_prepare', 'confirm_activate', 'confirm_cancel', 'confirm_expire', 'confirm_consume', 'confirm_block', 'confirm_unblock', 'confirm_compensate');
 if (in_array($action, $mutationActions, true) && (!GETPOST('token', 'alpha') || !hash_equals(currentToken(), GETPOST('token', 'alpha')))) accessforbidden('Bad token');
 
 /* Actions */
@@ -52,7 +53,7 @@ if ($action === 'add') {
 	$object->note_private = GETPOST('note_private', 'restricthtml');
 	if ($object->update($user) > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
 	else setEventMessages($langs->trans($object->error ?: 'ErrorVoucherUpdateFailed'), null, 'errors');
-} elseif ($id > 0 && str_starts_with($action, 'confirm_')) {
+} elseif ($id > 0 && in_array($action, array('confirm_prepare', 'confirm_activate', 'confirm_cancel', 'confirm_expire'), true) && GETPOST('confirm', 'alpha') === 'yes') {
 	if ($action === 'confirm_cancel') {
 		if (!$user->hasRight('dolivoucher', 'voucher', 'cancel')) accessforbidden();
 		$result = $service->cancelVoucher($id, $entity, $user, $langs->transnoentitiesnoconv('ManualCancellation'));
@@ -63,17 +64,20 @@ if ($action === 'add') {
 		if (!$user->hasRight('dolivoucher', 'voucher', 'write')) accessforbidden();
 		$result = $action === 'confirm_prepare' ? $service->prepareVoucher($id, $entity, $user) : $service->activateVoucher($id, $entity, $user);
 	}
-	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-} elseif ($id > 0 && $action === 'consume') {
+	if ($result > 0) {
+		$successMessage = $action === 'confirm_activate' ? 'VoucherActivatedSuccessfully' : 'OperationSuccessful';
+		setEventMessages($langs->trans($successMessage), null, 'mesgs');
+	}
+} elseif ($id > 0 && $action === 'confirm_consume' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'voucher', 'consume')) accessforbidden();
 	$result = $service->consumeVoucher($id, $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'), GETPOST('external_ref', 'alphanohtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-} elseif ($id > 0 && in_array($action, array('block', 'unblock'), true)) {
+} elseif ($id > 0 && in_array($action, array('confirm_block', 'confirm_unblock'), true) && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'voucher', 'block')) accessforbidden();
 	$reason = GETPOST('reason', 'restricthtml');
-	$result = $action === 'block' ? $service->blockVoucher($id, $entity, $user, $reason) : $service->unblockVoucher($id, $entity, $user, $reason);
+	$result = $action === 'confirm_block' ? $service->blockVoucher($id, $entity, $user, $reason) : $service->unblockVoucher($id, $entity, $user, $reason);
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-} elseif ($id > 0 && $action === 'compensate') {
+} elseif ($id > 0 && $action === 'confirm_compensate' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'audit', 'compensate')) accessforbidden();
 	$result = $service->compensateConsumption(GETPOSTINT('operation_id'), $entity, $user, GETPOST('reason', 'restricthtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
@@ -86,11 +90,7 @@ llxHeader('', $langs->trans('Voucher'), '', '', 0, 0, '', '', '', 'mod-dolivouch
 if ($action === 'create' || ($action === 'add' && $id <= 0)) {
 	print load_fiche_titre($langs->trans('NewVoucher'), '', 'ticket');
 	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="add"><table class="border centpercent">';
-	$sql = 'SELECT rowid, ref, label FROM '.$db->prefix().'dolivoucher_portfolio WHERE entity='.$entity.' AND status IN (1,2) ORDER BY ref'.$db->plimit(500, 0);
-	$resql = $db->query($sql);
-	print '<tr><td class="fieldrequired">'.$langs->trans('Portfolio').'</td><td><select name="fk_portfolio" required><option value=""></option>';
-	while ($resql && ($portfolio = $db->fetch_object($resql))) print '<option value="'.(int) $portfolio->rowid.'"'.(GETPOSTINT('fk_portfolio') === (int) $portfolio->rowid ? ' selected' : '').'>'.dol_escape_htmltag($portfolio->ref.' - '.$portfolio->label).'</option>';
-	print '</select></td></tr>';
+	print '<tr><td class="fieldrequired">'.$langs->trans('Portfolio').'</td><td>'.$form->selectForForms($portfolioSelectDescriptor, 'fk_portfolio', GETPOSTINT('fk_portfolio'), 'SelectPortfolio', '', '', 'minwidth300', 'required', 1).'</td></tr>';
 	print '<tr><td class="fieldrequired">'.$langs->trans('SerialNumber').'</td><td><input name="ref" required></td></tr><tr><td>'.$langs->trans('Barcode').'</td><td><input name="barcode"></td></tr><tr><td>'.$langs->trans('Label').'</td><td><input name="label"></td></tr>';
 	print '<tr><td class="fieldrequired">'.$langs->trans('InitialAmount').'</td><td><input name="initial_amount" required placeholder="0.00"> XOF</td></tr><tr><td>'.$langs->trans('Beneficiary').'</td><td><input name="beneficiary_name"></td></tr>';
 	print '<tr><td>'.$langs->trans('ExpirationDate').'</td><td>'.$form->selectDate(-1, 'date_expiration', 1, 1, 1, '', 1, 1).'</td></tr>';
@@ -102,11 +102,8 @@ if ($action === 'create' || ($action === 'add' && $id <= 0)) {
 if ($action === 'edit' && in_array((int) $object->status, array(0,1), true) && $user->hasRight('dolivoucher', 'voucher', 'write')) {
 	print load_fiche_titre($langs->trans('EditVoucher'), '', 'ticket');
 	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="'.(int) $object->id.'"><table class="border centpercent">';
-	$sql = 'SELECT rowid, ref, label FROM '.$db->prefix().'dolivoucher_portfolio WHERE entity='.$entity.' AND status IN (1,2) ORDER BY ref'.$db->plimit(500, 0);
-	$resql = $db->query($sql);
-	print '<tr><td>'.$langs->trans('Portfolio').'</td><td><select name="fk_portfolio">';
-	while ($resql && ($portfolio = $db->fetch_object($resql))) print '<option value="'.(int) $portfolio->rowid.'"'.((int) $object->fk_portfolio === (int) $portfolio->rowid ? ' selected' : '').'>'.dol_escape_htmltag($portfolio->ref.' - '.$portfolio->label).'</option>';
-	print '</select></td></tr><tr><td>'.$langs->trans('SerialNumber').'</td><td><input name="ref" value="'.dol_escape_htmltag($object->ref).'" required></td></tr><tr><td>'.$langs->trans('Barcode').'</td><td><input name="barcode" value="'.dol_escape_htmltag((string) $object->barcode).'"></td></tr><tr><td>'.$langs->trans('Label').'</td><td><input name="label" value="'.dol_escape_htmltag((string) $object->label).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('Portfolio').'</td><td>'.$form->selectForForms($portfolioSelectDescriptor, 'fk_portfolio', (int) $object->fk_portfolio, 'SelectPortfolio', '', '', 'minwidth300', 'required', 1).'</td></tr>';
+	print '<tr><td>'.$langs->trans('SerialNumber').'</td><td><input name="ref" value="'.dol_escape_htmltag($object->ref).'" required></td></tr><tr><td>'.$langs->trans('Barcode').'</td><td><input name="barcode" value="'.dol_escape_htmltag((string) $object->barcode).'"></td></tr><tr><td>'.$langs->trans('Label').'</td><td><input name="label" value="'.dol_escape_htmltag((string) $object->label).'"></td></tr>';
 	print '<tr><td>'.$langs->trans('InitialAmount').'</td><td><input name="initial_amount" value="'.dol_escape_htmltag((string) $object->initial_amount).'" required></td></tr><tr><td>'.$langs->trans('Beneficiary').'</td><td><input name="beneficiary_name" value="'.dol_escape_htmltag((string) $object->beneficiary_name).'"></td></tr>';
 	print '<tr><td>'.$langs->trans('ExpirationDate').'</td><td>'.$form->selectDate($object->date_expiration ?: -1, 'date_expiration', 1, 1, 1, '', 1, 1).'</td></tr>';
 	print '<tr><td>'.$langs->trans('NotePrivate').'</td><td><textarea name="note_private">'.dol_escape_htmltag((string) $object->note_private).'</textarea></td></tr>';
@@ -130,23 +127,43 @@ $canActivate = $portfolioState && in_array((int) $portfolioState->status, array(
 
 $confirmActions = array('prepare' => 'Prepare', 'activate' => 'Activate', 'cancel' => 'Cancel', 'expire' => 'RecordExpiration');
 if (isset($confirmActions[$action])) print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans($confirmActions[$action]), $langs->trans('ConfirmAction'), 'confirm_'.$action, '', 0, 1);
+if ($action === 'ask_consume') {
+	$formQuestions = array(
+		array('type' => 'hidden', 'name' => 'amount', 'value' => GETPOST('amount', 'alphanohtml')),
+		array('type' => 'hidden', 'name' => 'external_ref', 'value' => GETPOST('external_ref', 'alphanohtml')),
+		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
+	);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmConsumption'), $langs->trans('ConfirmAction'), 'confirm_consume', $formQuestions, 0, 1);
+}
+if (in_array($action, array('ask_block', 'ask_unblock'), true)) {
+	$confirmedAction = $action === 'ask_block' ? 'confirm_block' : 'confirm_unblock';
+	$formQuestions = array(array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')));
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans($action === 'ask_block' ? 'Block' : 'Unblock'), $langs->trans('ConfirmAction'), $confirmedAction, $formQuestions, 0, 1);
+}
+if ($action === 'ask_compensate') {
+	$formQuestions = array(
+		array('type' => 'hidden', 'name' => 'operation_id', 'value' => GETPOSTINT('operation_id')),
+		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
+	);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmCompensation'), $langs->trans('ConfirmAction'), 'confirm_compensate', $formQuestions, 0, 1);
+}
 print '<div class="tabsAction">';
 if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(0,1), true)) print '<a class="butAction" href="?id='.(int) $object->id.'&action=edit">'.$langs->trans('Modify').'</a>';
-if ($user->hasRight('dolivoucher', 'voucher', 'write') && (int) $object->status === 0) print '<a class="butAction" href="?id='.(int) $object->id.'&action=prepare">'.$langs->trans('Prepare').'</a>';
-if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(0,1), true) && $canActivate) print '<a class="butAction" href="?id='.(int) $object->id.'&action=activate">'.$langs->trans('Activate').'</a>';
-if ($user->hasRight('dolivoucher', 'voucher', 'cancel') && in_array((int) $object->status, array(2,6), true) && !$hasConsumption && DoliVoucherMoney::compare((string) $object->current_balance, (string) $object->initial_amount) === 0) print '<a class="butActionDelete" href="?id='.(int) $object->id.'&action=cancel">'.$langs->trans('Cancel').'</a>';
-if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(2,3,6), true) && !empty($object->date_expiration) && $object->date_expiration <= dol_now()) print '<a class="butAction" href="?id='.(int) $object->id.'&action=expire">'.$langs->trans('RecordExpiration').'</a>';
+if ($user->hasRight('dolivoucher', 'voucher', 'write') && (int) $object->status === 0) print '<a class="butAction" href="?id='.(int) $object->id.'&action=prepare&token='.newToken().'">'.$langs->trans('Prepare').'</a>';
+if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(0,1), true) && $canActivate) print '<a class="butAction" href="?id='.(int) $object->id.'&action=activate&token='.newToken().'">'.$langs->trans('Activate').'</a>';
+if ($user->hasRight('dolivoucher', 'voucher', 'cancel') && in_array((int) $object->status, array(2,6), true) && !$hasConsumption && DoliVoucherMoney::compare((string) $object->current_balance, (string) $object->initial_amount) === 0) print '<a class="butActionDelete" href="?id='.(int) $object->id.'&action=cancel&token='.newToken().'">'.$langs->trans('Cancel').'</a>';
+if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(2,3,6), true) && !empty($object->date_expiration) && $object->date_expiration <= dol_now()) print '<a class="butAction" href="?id='.(int) $object->id.'&action=expire&token='.newToken().'">'.$langs->trans('RecordExpiration').'</a>';
 print '</div>';
 
 if ($user->hasRight('dolivoucher', 'voucher', 'consume') && in_array((int) $object->status, array(2,3), true) && $notExpired) {
-	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="consume"><table class="border centpercent"><tr><td>'.$langs->trans('ManualConsumption').'</td><td><input name="amount" required placeholder="0.00"></td><td><input name="external_ref" placeholder="'.$langs->trans('ExternalRef').'"></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td><button class="button">'.$langs->trans('ConfirmConsumption').'</button></td></tr></table></form>';
+	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="ask_consume"><table class="border centpercent"><tr><td class="titlefield">'.$langs->trans('ManualConsumption').'</td><td><input name="amount" required placeholder="0.00"> <input name="external_ref" placeholder="'.$langs->trans('ExternalRef').'"> <input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction" href="#" onclick="this.closest(\'form\').requestSubmit(); return false;">'.$langs->trans('ConfirmConsumption').'</a></div></td></tr></table></form>';
 }
 if ($user->hasRight('dolivoucher', 'voucher', 'block') && in_array((int) $object->status, array(2,3,6), true)) {
 	$nextAction = (int) $object->status === 6 ? 'unblock' : 'block';
-	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="'.$nextAction.'"><table class="border centpercent"><tr><td>'.$langs->trans(ucfirst($nextAction)).'</td><td><input class="minwidth300" name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td><button class="button">'.$langs->trans('ConfirmAction').'</button></td></tr></table></form>';
+	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="ask_'.$nextAction.'"><table class="border centpercent"><tr><td class="titlefield">'.$langs->trans(ucfirst($nextAction)).'</td><td><input class="minwidth300" name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction" href="#" onclick="this.closest(\'form\').requestSubmit(); return false;">'.$langs->trans('ConfirmAction').'</a></div></td></tr></table></form>';
 }
 if ($user->hasRight('dolivoucher', 'audit', 'compensate') && $compensable && !in_array((int) $object->status, array(9,10), true)) {
-	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="compensate"><table class="border centpercent"><tr><td>'.$langs->trans('AdministrativeCompensation').'</td><td><input type="number" name="operation_id" value="'.(int) $compensable->rowid.'" readonly></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td><button class="button">'.$langs->trans('ConfirmCompensation').'</button></td></tr></table></form>';
+	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="ask_compensate"><table class="border centpercent"><tr><td class="titlefield">'.$langs->trans('AdministrativeCompensation').'</td><td><input type="number" name="operation_id" value="'.(int) $compensable->rowid.'" readonly> <input class="minwidth300" name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction" href="#" onclick="this.closest(\'form\').requestSubmit(); return false;">'.$langs->trans('ConfirmCompensation').'</a></div></td></tr></table></form>';
 }
 print '<br>'.load_fiche_titre($langs->trans('OperationJournal'), '', 'list');
 dolivoucherPrintOperations($db, $entity, 0, (int) $object->id);

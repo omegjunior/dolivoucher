@@ -23,7 +23,7 @@ class modDoliVoucher extends DolibarrModules
 		$this->editor_url = 'https://www.linkedin.com/in/frédéric-h-887621160';
 		$this->version = '0.1.0-dev';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
-		$this->picto = 'fa-ticket-alt';
+		$this->picto = 'fa-gavel';
 		$this->module_parts = array('triggers' => 0, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 0, 'printing' => 0, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array(), 'moduleforexternal' => 0);
 		$this->dirs = array('/dolivoucher/temp');
 		$this->config_page_url = array('setup.php@dolivoucher');
@@ -72,18 +72,23 @@ class modDoliVoucher extends DolibarrModules
 
 		$this->menu = array();
 		$r = 0;
-		$this->menu[$r++] = $this->menuEntry('', 'top', 'GiftVouchers', 'dolivoucher', '', '/dolivoucher/dolivoucherindex.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r);
-		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'Portfolios', 'dolivoucher', 'portfolios', '/dolivoucher/portfolio_list.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r);
+		$this->menu[$r++] = $this->menuEntry('', 'top', 'GiftVouchers', 'dolivoucher', '', '/dolivoucher/dolivoucherindex.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r, $this->picto);
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'Portfolios', 'dolivoucher', 'portfolios', '/dolivoucher/portfolio_list.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r, 'fa-wallet');
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher,fk_leftmenu=portfolios', 'left', 'NewPortfolio', 'dolivoucher', 'portfolio_new', '/dolivoucher/portfolio_card.php?action=create', '$user->hasRight("dolivoucher", "portfolio", "write")', $r);
-		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'Vouchers', 'dolivoucher', 'vouchers', '/dolivoucher/voucher_list.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r);
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'Vouchers', 'dolivoucher', 'vouchers', '/dolivoucher/voucher_list.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r, 'fa-ticket-alt');
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher,fk_leftmenu=vouchers', 'left', 'NewVoucher', 'dolivoucher', 'voucher_new', '/dolivoucher/voucher_card.php?action=create', '$user->hasRight("dolivoucher", "voucher", "write")', $r);
-		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'OperationJournal', 'dolivoucher', 'operation_journal', '/dolivoucher/operation_list.php', '$user->hasRight("dolivoucher", "audit", "read")', $r);
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'OperationJournal', 'dolivoucher', 'operation_journal', '/dolivoucher/operation_list.php', '$user->hasRight("dolivoucher", "audit", "read")', $r, 'fa-list-alt');
 	}
 
 	/** @return array<string,mixed> */
-	private function menuEntry(string $parent, string $type, string $title, string $main, string $left, string $url, string $permission, int $position): array
+	private function menuEntry(string $parent, string $type, string $title, string $main, string $left, string $url, string $permission, int $position, string $picto = ''): array
 	{
-		return array('fk_menu' => $parent, 'type' => $type, 'titre' => $title, 'mainmenu' => $main, 'leftmenu' => $left, 'url' => $url, 'langs' => 'dolivoucher@dolivoucher', 'position' => 1000 + $position, 'enabled' => 'isModEnabled("dolivoucher")', 'perms' => $permission, 'target' => '', 'user' => 0);
+		$entry = array('fk_menu' => $parent, 'type' => $type, 'titre' => $title, 'mainmenu' => $main, 'leftmenu' => $left, 'url' => $url, 'langs' => 'dolivoucher@dolivoucher', 'position' => 1000 + $position, 'enabled' => 'isModEnabled("dolivoucher")', 'perms' => $permission, 'target' => '', 'user' => 0);
+		if ($picto !== '') {
+			$entry['prefix'] = img_picto('', $picto, 'class="paddingright pictofixedwidth em092"');
+		}
+
+		return $entry;
 	}
 
 	public function init($options = '')
