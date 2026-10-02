@@ -206,7 +206,7 @@ if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && in_array((int) $o
 	print '<br><form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="ask_fund"><input type="hidden" name="id" value="'.(int) $object->id.'">';
 	print '<table class="border centpercent"><tr><td>'.$langs->trans('FundingType').'</td><td>'.$form->selectarray('funding_type', $fundingTypeOptions, 'FUND_NEW', 0, 0, 0, '', 0, 0, 0, '', 'minwidth200').'</td><td><input name="amount" required placeholder="0.00"></td><td><input name="external_ref" placeholder="'.$langs->trans('ExternalRef').'"></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="center"><input type="submit" class="button button-save" value="'.$langs->trans('ConfirmFunding').'"></td></tr></table></form>';
 }
-if ($user->hasRight('dolivoucher', 'transfer', 'write') && in_array((int) $object->status, array(1,2,3), true) && DoliVoucherMoney::compare((string) $object->available_unallocated_balance, '0') > 0) {
+if ($action !== 'ask_transfer' && $user->hasRight('dolivoucher', 'transfer', 'write') && in_array((int) $object->status, array(1,2,3), true) && DoliVoucherMoney::compare((string) $object->available_unallocated_balance, '0') > 0) {
 	$destinationOptions = array();
 	$sqlDestinations = 'SELECT rowid, ref, label FROM '.$db->prefix().'dolivoucher_portfolio WHERE entity='.$entity.' AND rowid<>'.(int) $object->id.' AND status IN (1,2) ORDER BY ref';
 	$resqlDestinations = $db->query($sqlDestinations);
