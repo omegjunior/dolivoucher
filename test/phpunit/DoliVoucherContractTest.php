@@ -195,6 +195,7 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertSame(3, substr_count($voucherCard, '<td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction"'));
 		self::assertStringContainsString("requestSubmit(); return false;\">'.\$langs->trans('ConfirmTransfer')", $portfolioCard);
 		self::assertStringNotContainsString("<button class=\"button\">'.\$langs->trans('ConfirmTransfer')", $portfolioCard);
+		self::assertStringContainsString("if (\$action !== 'ask_transfer' && \$user->hasRight('dolivoucher', 'transfer', 'write')", $portfolioCard);
 
 		$portfolioList = $this->read('portfolio_list.php');
 		self::assertStringContainsString("selectarray('search_type', \$portfolioTypeOptions", $portfolioList);
