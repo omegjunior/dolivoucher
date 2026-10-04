@@ -68,19 +68,27 @@ if ($action === 'add') {
 		$successMessage = $action === 'confirm_activate' ? 'VoucherActivatedSuccessfully' : 'OperationSuccessful';
 		setEventMessages($langs->trans($successMessage), null, 'mesgs');
 	}
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 } elseif ($id > 0 && $action === 'confirm_consume' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'voucher', 'consume')) accessforbidden();
 	$result = $service->consumeVoucher($id, $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'), GETPOST('external_ref', 'alphanohtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 } elseif ($id > 0 && in_array($action, array('confirm_block', 'confirm_unblock'), true) && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'voucher', 'block')) accessforbidden();
 	$reason = GETPOST('reason', 'restricthtml');
 	$result = $action === 'confirm_block' ? $service->blockVoucher($id, $entity, $user, $reason) : $service->unblockVoucher($id, $entity, $user, $reason);
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 } elseif ($id > 0 && $action === 'confirm_compensate' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'audit', 'compensate')) accessforbidden();
 	$result = $service->compensateConsumption(GETPOSTINT('operation_id'), $entity, $user, GETPOST('reason', 'restricthtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 }
 
 if ($id > 0 && $object->fetch($id) <= 0) accessforbidden($langs->trans('ErrorRecordNotFound'));
@@ -128,24 +136,29 @@ $canActivate = $portfolioState && in_array((int) $portfolioState->status, array(
 $confirmActions = array('prepare' => 'Prepare', 'activate' => 'Activate', 'cancel' => 'Cancel', 'expire' => 'RecordExpiration');
 if (isset($confirmActions[$action])) print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans($confirmActions[$action]), $langs->trans('ConfirmAction'), 'confirm_'.$action, '', 0, 1);
 if ($action === 'ask_consume') {
-	$formQuestions = array(
-		array('type' => 'hidden', 'name' => 'amount', 'value' => GETPOST('amount', 'alphanohtml')),
-		array('type' => 'hidden', 'name' => 'external_ref', 'value' => GETPOST('external_ref', 'alphanohtml')),
-		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
-	);
-	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmConsumption'), $langs->trans('ConfirmAction'), 'confirm_consume', $formQuestions, 0, 1);
+	$confirmConsumptionParameters = http_build_query(array(
+		'id' => (int) $object->id,
+		'amount' => GETPOST('amount', 'alphanohtml'),
+		'external_ref' => GETPOST('external_ref', 'alphanohtml'),
+		'reason' => GETPOST('reason', 'restricthtml'),
+	), '', '&', PHP_QUERY_RFC3986);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?'.$confirmConsumptionParameters, $langs->trans('ConfirmConsumption'), $langs->trans('ConfirmAction'), 'confirm_consume', '', 0, 1);
 }
 if (in_array($action, array('ask_block', 'ask_unblock'), true)) {
 	$confirmedAction = $action === 'ask_block' ? 'confirm_block' : 'confirm_unblock';
-	$formQuestions = array(array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')));
-	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans($action === 'ask_block' ? 'Block' : 'Unblock'), $langs->trans('ConfirmAction'), $confirmedAction, $formQuestions, 0, 1);
+	$confirmBlockParameters = http_build_query(array(
+		'id' => (int) $object->id,
+		'reason' => GETPOST('reason', 'restricthtml'),
+	), '', '&', PHP_QUERY_RFC3986);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?'.$confirmBlockParameters, $langs->trans($action === 'ask_block' ? 'Block' : 'Unblock'), $langs->trans('ConfirmAction'), $confirmedAction, '', 0, 1);
 }
 if ($action === 'ask_compensate') {
-	$formQuestions = array(
-		array('type' => 'hidden', 'name' => 'operation_id', 'value' => GETPOSTINT('operation_id')),
-		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
-	);
-	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmCompensation'), $langs->trans('ConfirmAction'), 'confirm_compensate', $formQuestions, 0, 1);
+	$confirmCompensationParameters = http_build_query(array(
+		'id' => (int) $object->id,
+		'operation_id' => GETPOSTINT('operation_id'),
+		'reason' => GETPOST('reason', 'restricthtml'),
+	), '', '&', PHP_QUERY_RFC3986);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?'.$confirmCompensationParameters, $langs->trans('ConfirmCompensation'), $langs->trans('ConfirmAction'), 'confirm_compensate', '', 0, 1);
 }
 print '<div class="tabsAction">';
 if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(0,1), true)) print '<a class="butAction" href="?id='.(int) $object->id.'&action=edit">'.$langs->trans('Modify').'</a>';

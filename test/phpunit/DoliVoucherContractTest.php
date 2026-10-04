@@ -162,6 +162,7 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("selectarray('type', \$portfolioTypeOptions", $portfolioCard);
 		self::assertStringContainsString("selectarray('funding_type', \$fundingTypeOptions", $portfolioCard);
 		self::assertStringContainsString("selectarray('destination_id', \$destinationOptions", $portfolioCard);
+		self::assertStringContainsString("print '</table></div></div><div class=\"clearboth\"></div>';", $portfolioCard);
 		self::assertStringContainsString('<input type="submit" class="button button-save"', $portfolioCard);
 		self::assertStringContainsString("trans('ConfirmFunding')", $portfolioCard);
 		self::assertStringContainsString("selectDate(-1, 'date_expiration'", $voucherCard);
@@ -185,6 +186,13 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertGreaterThanOrEqual(3, substr_count($portfolioCard, '->formconfirm('));
 		self::assertGreaterThanOrEqual(4, substr_count($voucherCard, "GETPOST('confirm', 'alpha') === 'yes'"));
 		self::assertGreaterThanOrEqual(3, substr_count($portfolioCard, "GETPOST('confirm', 'alpha') === 'yes'"));
+		self::assertGreaterThanOrEqual(4, substr_count($voucherCard, "header('Location: '.\$_SERVER['PHP_SELF'].'?id='.\$id);"));
+		self::assertSame(3, substr_count($voucherCard, 'http_build_query(array('));
+		self::assertStringNotContainsString('$formQuestions = array(', $voucherCard);
+		self::assertGreaterThanOrEqual(3, substr_count($portfolioCard, "header('Location: '.\$_SERVER['PHP_SELF'].'?id='.\$id);"));
+		self::assertSame(2, substr_count($portfolioCard, 'http_build_query(array('));
+		self::assertStringNotContainsString("array('type' => 'hidden', 'name' => 'funding_type'", $portfolioCard);
+		self::assertStringNotContainsString("array('type' => 'hidden', 'name' => 'destination_id'", $portfolioCard);
 		self::assertStringContainsString("'PortfolioActivatedSuccessfully'", $portfolioCard);
 		self::assertStringContainsString("'VoucherActivatedSuccessfully'", $voucherCard);
 		self::assertStringContainsString('PortfolioActivatedSuccessfully=Le portefeuille a été activé avec succès.', $this->read('langs/fr_FR/dolivoucher.lang'));
@@ -217,6 +225,15 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("selectDate(\$dateFrom ?: -1, 'date_from'", $operationList);
 		self::assertStringContainsString("selectDate(\$dateTo ?: -1, 'date_to'", $operationList);
 		self::assertStringNotContainsString('type="date"', $operationList);
+		self::assertStringContainsString("include DOL_DOCUMENT_ROOT.'/core/actions_changeselectedfields.inc.php'", $operationList);
+		self::assertStringContainsString("multiSelectArrayWithCheckbox('selectedfields', \$arrayfields, \$contextpage)", $operationList);
+		self::assertStringContainsString("selectarray('search_type', \$operationTypes", $operationList);
+		self::assertStringContainsString('name="search_amount"', $operationList);
+		self::assertStringContainsString('name="search_reason"', $operationList);
+		self::assertStringContainsString('class="liste_titre button_removefilter reposition"', $operationList);
+		self::assertStringContainsString('$db->plimit($limit + 1, $offset)', $operationList);
+		self::assertStringContainsString('$num = $resql ? $db->num_rows($resql) : 0;', $operationList);
+		self::assertMatchesRegularExpression('/print_barre_liste\([^;]*\$num[^;]*\$limit\);/', $operationList);
 	}
 
 	private function read(string $relative): string
