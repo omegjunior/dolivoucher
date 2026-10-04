@@ -82,6 +82,8 @@ if ($action === 'add') {
 		$successMessage = $action === 'confirm_activate' ? 'PortfolioActivatedSuccessfully' : 'OperationSuccessful';
 		setEventMessages($langs->trans($successMessage), null, 'mesgs');
 	}
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 } elseif ($id > 0 && $action === 'confirm_fund' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'portfolio', 'validate')) {
 		accessforbidden();
@@ -91,12 +93,16 @@ if ($action === 'add') {
 		? $service->addCarryover($id, $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'), GETPOST('external_ref', 'alphanohtml'))
 		: $service->fundPortfolio($id, $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'), GETPOST('external_ref', 'alphanohtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 } elseif ($id > 0 && $action === 'confirm_transfer' && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'transfer', 'write')) {
 		accessforbidden();
 	}
 	$result = $service->transferRemainder($id, GETPOSTINT('destination_id'), $entity, GETPOST('amount', 'alphanohtml'), $user, GETPOST('reason', 'restricthtml'));
 	if ($result > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+	header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+	exit;
 }
 
 if ($id > 0 && $object->fetch($id) <= 0) {
@@ -168,28 +174,30 @@ $money = array(
 );
 foreach ($money as $label => $key) print '<tr><td>'.$langs->trans($label).'</td><td class="right">'.price($summary[$key] ?? 0, 0, $langs, 1, -1, -1, 'XOF').'</td></tr>';
 print '<tr><td>'.$langs->trans('VoucherCount').'</td><td class="right">'.(int) ($summary['voucher_count'] ?? 0).'</td></tr><tr><td>'.$langs->trans('ActiveVoucherCount').'</td><td class="right">'.(int) ($summary['active_count'] ?? 0).'</td></tr><tr><td>'.$langs->trans('ConsumedVoucherCount').'</td><td class="right">'.(int) ($summary['consumed_count'] ?? 0).'</td></tr>';
-print '</table></div></div>';
+print '</table></div></div><div class="clearboth"></div>';
 
 $confirmActions = array('validate' => 'Validate', 'activate' => 'Activate', 'close' => 'Close', 'cancel' => 'Cancel');
 if (isset($confirmActions[$action])) {
 	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans($confirmActions[$action]), $langs->trans('ConfirmAction'), 'confirm_'.$action, '', 0, 1);
 }
 if ($action === 'ask_fund') {
-	$formQuestions = array(
-		array('type' => 'hidden', 'name' => 'funding_type', 'value' => GETPOST('funding_type', 'alpha')),
-		array('type' => 'hidden', 'name' => 'amount', 'value' => GETPOST('amount', 'alphanohtml')),
-		array('type' => 'hidden', 'name' => 'external_ref', 'value' => GETPOST('external_ref', 'alphanohtml')),
-		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
-	);
-	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmFunding'), $langs->trans('ConfirmAction'), 'confirm_fund', $formQuestions, 0, 1);
+	$confirmFundingParameters = http_build_query(array(
+		'id' => (int) $object->id,
+		'funding_type' => GETPOST('funding_type', 'alpha'),
+		'amount' => GETPOST('amount', 'alphanohtml'),
+		'external_ref' => GETPOST('external_ref', 'alphanohtml'),
+		'reason' => GETPOST('reason', 'restricthtml'),
+	), '', '&', PHP_QUERY_RFC3986);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?'.$confirmFundingParameters, $langs->trans('ConfirmFunding'), $langs->trans('ConfirmAction'), 'confirm_fund', '', 0, 1);
 }
 if ($action === 'ask_transfer') {
-	$formQuestions = array(
-		array('type' => 'hidden', 'name' => 'destination_id', 'value' => GETPOSTINT('destination_id')),
-		array('type' => 'hidden', 'name' => 'amount', 'value' => GETPOST('amount', 'alphanohtml')),
-		array('type' => 'hidden', 'name' => 'reason', 'value' => GETPOST('reason', 'restricthtml')),
-	);
-	print $form->formconfirm($_SERVER['PHP_SELF'].'?id='.(int) $object->id, $langs->trans('ConfirmTransfer'), $langs->trans('ConfirmAction'), 'confirm_transfer', $formQuestions, 0, 1);
+	$confirmTransferParameters = http_build_query(array(
+		'id' => (int) $object->id,
+		'destination_id' => GETPOSTINT('destination_id'),
+		'amount' => GETPOST('amount', 'alphanohtml'),
+		'reason' => GETPOST('reason', 'restricthtml'),
+	), '', '&', PHP_QUERY_RFC3986);
+	print $form->formconfirm($_SERVER['PHP_SELF'].'?'.$confirmTransferParameters, $langs->trans('ConfirmTransfer'), $langs->trans('ConfirmAction'), 'confirm_transfer', '', 0, 1);
 }
 print '<div class="tabsAction">';
 if ($user->hasRight('dolivoucher', 'portfolio', 'write') && (int) $object->status === DoliVoucherPortfolio::STATUS_DRAFT) print '<a class="butAction" href="?id='.(int) $object->id.'&action=edit">'.$langs->trans('Modify').'</a>';
