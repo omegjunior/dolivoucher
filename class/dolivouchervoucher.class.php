@@ -29,6 +29,7 @@ class DoliVoucherVoucher extends CommonObject
 		'rowid' => array('type' => 'integer', 'label' => 'Id', 'notnull' => 1, 'visible' => -2),
 		'entity' => array('type' => 'integer', 'label' => 'Entity', 'notnull' => 1, 'visible' => -2),
 		'fk_portfolio' => array('type' => 'integer', 'label' => 'Portfolio', 'notnull' => 1, 'visible' => 1),
+		'fk_series' => array('type' => 'integer', 'label' => 'Series', 'visible' => 1),
 		'ref' => array('type' => 'varchar(128)', 'label' => 'SerialNumber', 'notnull' => 1, 'visible' => 1),
 		'barcode' => array('type' => 'varchar(128)', 'label' => 'Barcode', 'visible' => 1),
 		'label' => array('type' => 'varchar(255)', 'label' => 'Label', 'visible' => 1),
@@ -50,6 +51,7 @@ class DoliVoucherVoucher extends CommonObject
 	public $rowid;
 	public $entity;
 	public $fk_portfolio;
+	public $fk_series;
 	public $ref;
 	public $barcode;
 	public $label;
@@ -87,6 +89,9 @@ class DoliVoucherVoucher extends CommonObject
 		if (!$this->portfolioAcceptsVoucher()) {
 			return -1;
 		}
+		if (!$this->seriesMatchesPortfolio()) {
+			return -1;
+		}
 		return $this->createCommon($user, $notrigger);
 	}
 
@@ -112,6 +117,10 @@ class DoliVoucherVoucher extends CommonObject
 			$this->error = 'ErrorActivatedVoucherImmutable';
 			return -1;
 		}
+		if (!empty($stored->fk_series)) {
+			$this->error = 'ErrorSeriesVoucherImmutable';
+			return -1;
+		}
 		$this->current_balance = '0.00000000';
 		try {
 			$this->initial_amount = DoliVoucherMoney::normalize($this->initial_amount, true);
@@ -119,11 +128,15 @@ class DoliVoucherVoucher extends CommonObject
 			$this->error = 'ErrorAmountMustBePositive';
 			return -1;
 		}
-		return $this->portfolioAcceptsVoucher() ? $this->updateCommon($user, $notrigger) : -1;
+		return $this->portfolioAcceptsVoucher() && $this->seriesMatchesPortfolio() ? $this->updateCommon($user, $notrigger) : -1;
 	}
 
 	public function delete(User $user, $notrigger = 0)
 	{
+		if (!empty($this->fk_series)) {
+			$this->error = 'ErrorSeriesVoucherDeletionForbidden';
+			return -1;
+		}
 		if (!in_array((int) $this->status, array(self::STATUS_DRAFT, self::STATUS_PREPARED), true)) {
 			$this->error = 'ErrorVoucherDeletionForbidden';
 			return -1;
@@ -155,5 +168,18 @@ class DoliVoucherVoucher extends CommonObject
 			return false;
 		}
 		return trim((string) $this->ref) !== '';
+	}
+
+	private function seriesMatchesPortfolio(): bool
+	{
+		if (empty($this->fk_series)) return true;
+		$sql = 'SELECT rowid FROM '.$this->db->prefix().'dolivoucher_series WHERE rowid='.(int) $this->fk_series;
+		$sql .= ' AND entity='.(int) $this->entity.' AND fk_portfolio='.(int) $this->fk_portfolio.' LIMIT 1';
+		$resql = $this->db->query($sql);
+		if (!$resql || !$this->db->fetch_object($resql)) {
+			$this->error = 'ErrorSeriesPortfolioMismatch';
+			return false;
+		}
+		return true;
 	}
 }

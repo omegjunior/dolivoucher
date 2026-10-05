@@ -21,11 +21,11 @@ class modDoliVoucher extends DolibarrModules
 		$this->descriptionlong = 'DoliVoucherDescription';
 		$this->editor_name = 'Fred Omega Junior';
 		$this->editor_url = 'https://www.linkedin.com/in/frédéric-h-887621160';
-		$this->version = '0.1.0-dev';
+		$this->version = '0.2.0-dev';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-gavel';
-		$this->module_parts = array('triggers' => 0, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 0, 'printing' => 0, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array(), 'moduleforexternal' => 0);
-		$this->dirs = array('/dolivoucher/temp');
+		$this->module_parts = array('triggers' => 0, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 1, 'printing' => 1, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array(), 'moduleforexternal' => 0);
+		$this->dirs = array('/dolivoucher/temp', '/dolivoucher/series');
 		$this->config_page_url = array('setup.php@dolivoucher');
 		$this->hidden = getDolGlobalInt('MODULE_DOLIVOUCHER_DISABLED');
 		$this->depends = array();
@@ -37,7 +37,10 @@ class modDoliVoucher extends DolibarrModules
 		$this->need_javascript_ajax = 0;
 		$this->warnings_activation = array();
 		$this->warnings_activation_ext = array();
-		$this->const = array();
+		$this->const = array(
+			array('DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES', 'chaine', '1000', 'DoliVoucherMaxVouchersPerSeries', 0, 'current', 1),
+			array('DOLIVOUCHER_MAX_VOUCHERS_PER_PDF', 'chaine', '1000', 'DoliVoucherMaxVouchersPerPdf', 0, 'current', 1),
+		);
 		if (!isModEnabled('dolivoucher')) {
 			$conf->dolivoucher = new stdClass();
 			$conf->dolivoucher->enabled = 0;
@@ -60,6 +63,12 @@ class modDoliVoucher extends DolibarrModules
 			array(50111609, 'DoliVoucherPermissionCompensate', 'audit', 'compensate'),
 			array(50111610, 'DoliVoucherPermissionAuditRead', 'audit', 'read'),
 			array(50111611, 'DoliVoucherPermissionConfigure', 'config', 'write'),
+			array(50111612, 'DoliVoucherPermissionSeriesRead', 'series', 'read'),
+			array(50111613, 'DoliVoucherPermissionSeriesGenerate', 'series', 'generate'),
+			array(50111614, 'DoliVoucherPermissionSeriesPrint', 'series', 'print'),
+			array(50111615, 'DoliVoucherPermissionSeriesReprint', 'series', 'reprint'),
+			array(50111616, 'DoliVoucherPermissionSeriesPrepare', 'series', 'prepare'),
+			array(50111617, 'DoliVoucherPermissionSeriesDeliver', 'series', 'deliver'),
 		);
 		foreach ($permissions as $permission) {
 			$r = count($this->rights);
@@ -77,6 +86,8 @@ class modDoliVoucher extends DolibarrModules
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher,fk_leftmenu=portfolios', 'left', 'NewPortfolio', 'dolivoucher', 'portfolio_new', '/dolivoucher/portfolio_card.php?action=create', '$user->hasRight("dolivoucher", "portfolio", "write")', $r);
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'Vouchers', 'dolivoucher', 'vouchers', '/dolivoucher/voucher_list.php', '$user->hasRight("dolivoucher", "portfolio", "read")', $r, 'fa-ticket-alt');
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher,fk_leftmenu=vouchers', 'left', 'NewVoucher', 'dolivoucher', 'voucher_new', '/dolivoucher/voucher_card.php?action=create', '$user->hasRight("dolivoucher", "voucher", "write")', $r);
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'VoucherSeries', 'dolivoucher', 'series', '/dolivoucher/series_list.php', '$user->hasRight("dolivoucher", "series", "read")', $r, 'fa-layer-group');
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher,fk_leftmenu=series', 'left', 'NewVoucherSeries', 'dolivoucher', 'series_new', '/dolivoucher/series_card.php?action=create', '$user->hasRight("dolivoucher", "series", "generate")', $r);
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'OperationJournal', 'dolivoucher', 'operation_journal', '/dolivoucher/operation_list.php', '$user->hasRight("dolivoucher", "audit", "read")', $r, 'fa-list-alt');
 	}
 

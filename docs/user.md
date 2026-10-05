@@ -26,3 +26,15 @@ Only unallocated value can be transferred. Portfolios must be in the same entity
 ## Corrections
 
 Journal entries cannot be edited or deleted. Phase 1 can compensate one consumption once, crediting the voucher through a linked correction. Transfers are corrected by an explicit controlled reverse transfer.
+
+## Voucher series and printing
+
+Open **Voucher series > New series**, select a validated or active portfolio, a quantity, a face value and an optional expiration date. Generation creates all vouchers as financial drafts. It does not reserve the portfolio and does not activate any voucher.
+
+Series references use `DVS-YYYY-NNNNNN`; each voucher adds its local six-digit number. Its Code 128 barcode contains only that immutable serial. The PDF is A4 portrait with four vouchers per page, issuer information, value/currency, series, portfolio label when present, expiration when present and the human-readable barcode.
+
+Printing can cover the whole series, a continuous local-number range, or an explicit list of complete voucher references. A partial first print shows its coverage but does not mark the series fully printed. Never-printed vouchers and reprints must be submitted separately. A reprint requires the dedicated permission and a mandatory reason.
+
+After full print coverage, authorized users may record full physical preparation and then full delivery or availability. These material actions do not activate vouchers, move balances, consume value or change the portfolio. Partial preparation/delivery is deliberately not offered in this phase.
+
+Every material event is immutable and visible on the series card. PDF events show their revision and downloadable document; each stored file is tied to its SHA-256 audit fingerprint.

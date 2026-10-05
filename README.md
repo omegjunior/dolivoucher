@@ -1,6 +1,6 @@
 # DoliVoucher
 
-DoliVoucher is a Dolibarr 22 module for managing funded voucher portfolios, serialized vouchers and their immutable operation history. Phase 1 targets PHP 8.1+, MariaDB 10.11 and XOF without modifying Dolibarr core or adding dependencies.
+DoliVoucher is a Dolibarr 22 module for managing funded voucher portfolios, serialized vouchers, series and their immutable financial and material histories. It targets PHP 8.1+, MariaDB 10.11 and XOF without modifying Dolibarr core or adding dependencies.
 
 ## Concepts
 
@@ -22,12 +22,20 @@ Place this directory at `htdocs/custom/dolivoucher`, then:
 
 1. Log into Dolibarr as a super-administrator.
 2. Go to **Setup > Modules**.
-3. Enable DoliVoucher and allocate its eleven permissions.
+3. Enable DoliVoucher and allocate its seventeen permissions, including the restrictive reprint and delivery rights.
 
 The provisional module ID is `501116` and must be reserved or replaced before public distribution.
 
 See [user documentation](docs/user.md), [developer documentation](docs/developer.md), [database schema](docs/database-schema.md), [accounting boundaries](docs/accounting-boundaries.md), and [tests](docs/tests.md).
 
-## Phase 1 boundaries
+## Series and physical supports
 
-No product, stock movement, invoice payment, discount, TakePOS integration, accounting entry, VAT decision or SYSCOHADA mapping is created.
+Phase 2 generates a series atomically with references `DVS-YYYY-NNNNNN` and voucher numbers `DVS-YYYY-NNNNNN-NNNNNN`. Each entity has an independent yearly series counter. Generated vouchers remain financial drafts with a zero balance: printing, preparation and delivery never reserve or move money.
+
+The A4 portrait PDF contains four approximately A6 vouchers per page and native Code 128 barcodes whose payload is exactly the immutable voucher reference. Whole-series, continuous-range and explicit-list printing are supported. Print coverage is calculated per voucher; a series becomes printed only after every generated voucher has appeared in a successful document. Reprints require a dedicated right and a reason, and are stored with revision, file name, SHA-256 and user/date metadata in a separate append-only material journal.
+
+The administrator can configure `DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES` and `DOLIVOUCHER_MAX_VOUCHERS_PER_PDF` (defaults: 1000; technical local-counter ceiling: 999999).
+
+## Boundaries
+
+No product, stock movement, invoice payment, discount, TakePOS integration, accounting entry, VAT decision or SYSCOHADA mapping is created. Material preparation or delivery is not financial activation or consumption.

@@ -96,12 +96,33 @@ function dolivoucherVoucherStatuses()
 	return array(0 => 'Draft', 1 => 'Prepared', 2 => 'Active', 3 => 'PartiallyConsumed', 4 => 'Consumed', 6 => 'Blocked', 9 => 'Canceled', 10 => 'Expired');
 }
 
+/** @return array<int,string> */
+function dolivoucherSeriesStatuses()
+{
+	return array(0 => 'Draft', 1 => 'Generated', 2 => 'Printed', 3 => 'MateriallyPrepared', 4 => 'Delivered', 9 => 'Canceled');
+}
+
 function dolivoucherStatusLabel($status, $voucher = false)
 {
 	global $langs;
 	$statuses = $voucher ? dolivoucherVoucherStatuses() : dolivoucherPortfolioStatuses();
 	$key = $statuses[(int) $status] ?? 'Unknown';
 	return $langs->trans($key);
+}
+
+/** Return a Dolibarr native status badge for a DoliVoucher object. */
+function dolivoucherStatusBadge($status, $scope = 'portfolio')
+{
+	global $langs;
+	$statuses = $scope === 'voucher' ? dolivoucherVoucherStatuses() : ($scope === 'series' ? dolivoucherSeriesStatuses() : dolivoucherPortfolioStatuses());
+	$key = $statuses[(int) $status] ?? 'Unknown';
+	$statusTypes = array(
+		'portfolio' => array(0 => 'status0', 1 => 'status1', 2 => 'status4', 3 => 'status6', 9 => 'status9'),
+		'voucher' => array(0 => 'status0', 1 => 'status1', 2 => 'status4', 3 => 'status3', 4 => 'status6', 6 => 'status8', 9 => 'status9', 10 => 'status5'),
+		'series' => array(0 => 'status0', 1 => 'status1', 2 => 'status4', 3 => 'status3', 4 => 'status6', 9 => 'status9'),
+	);
+	$label = $langs->trans($key);
+	return dolGetStatus($label, $label, '', $statusTypes[$scope][(int) $status] ?? 'status0', 6);
 }
 
 /** Render the immutable operation history for one scope. */

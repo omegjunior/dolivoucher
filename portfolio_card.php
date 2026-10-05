@@ -67,8 +67,13 @@ if ($action === 'add') {
 	$object->date_start = GETPOSTINT('date_startyear') > 0 ? dol_mktime(0, 0, 0, GETPOSTINT('date_startmonth'), GETPOSTINT('date_startday'), GETPOSTINT('date_startyear')) : null;
 	$object->date_end = GETPOSTINT('date_endyear') > 0 ? dol_mktime(0, 0, 0, GETPOSTINT('date_endmonth'), GETPOSTINT('date_endday'), GETPOSTINT('date_endyear')) : null;
 	$object->description = GETPOST('description', 'restricthtml');
-	if ($object->update($user) > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-	else setEventMessages($langs->trans($object->error ?: 'ErrorPortfolioUpdateFailed'), null, 'errors');
+	if ($object->update($user) > 0) {
+		setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+		header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+		exit;
+	}
+	setEventMessages($langs->trans($object->error ?: 'ErrorPortfolioUpdateFailed'), null, 'errors');
+	$action = 'edit';
 } elseif ($id > 0 && in_array($action, array('confirm_validate', 'confirm_activate', 'confirm_close', 'confirm_cancel'), true) && GETPOST('confirm', 'alpha') === 'yes') {
 	if (!$user->hasRight('dolivoucher', 'portfolio', 'validate')) {
 		accessforbidden();
@@ -133,18 +138,21 @@ if ($action === 'create' || ($action === 'add' && $id <= 0)) {
 
 if ($action === 'edit' && (int) $object->status === DoliVoucherPortfolio::STATUS_DRAFT && $user->hasRight('dolivoucher', 'portfolio', 'write')) {
 	print load_fiche_titre($langs->trans('EditPortfolio'), '', 'wallet');
-	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="'.(int) $object->id.'"><table class="border centpercent">';
+	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="'.(int) $object->id.'"><table class="border centpercent">';
 	print '<tr><td class="fieldrequired">'.$langs->trans('Ref').'</td><td><input name="ref" value="'.dol_escape_htmltag($object->ref).'" required></td></tr><tr><td class="fieldrequired">'.$langs->trans('Label').'</td><td><input name="label" value="'.dol_escape_htmltag($object->label).'" required></td></tr>';
 	print '<tr><td>'.$langs->trans('Type').'</td><td>'.$form->selectarray('type', $portfolioTypeOptions, $object->type, 0, 0, 0, '', 0, 0, 0, '', 'minwidth200').'</td></tr>';
 	print '<tr><td>'.$langs->trans('FundingThirdParty').'</td><td>'.$form->select_company((int) $object->fk_soc, 'fk_soc', '', 'SelectThirdParty', 0, 0, array(), 0, 'minwidth300').'</td></tr>';
 	print '<tr><td>'.$langs->trans('Period').'</td><td><input name="period_label" value="'.dol_escape_htmltag((string) $object->period_label).'"></td></tr>';
 	print '<tr><td>'.$langs->trans('DateStart').'</td><td>'.$form->selectDate($object->date_start ?: -1, 'date_start', 0, 0, 1, '', 1, 1).'</td></tr>';
 	print '<tr><td>'.$langs->trans('DateEnd').'</td><td>'.$form->selectDate($object->date_end ?: -1, 'date_end', 0, 0, 1, '', 1, 1).'</td></tr>';
-	print '<tr><td>'.$langs->trans('Description').'</td><td><textarea name="description">'.dol_escape_htmltag((string) $object->description).'</textarea></td></tr></table><div class="center"><button class="button button-save">'.$langs->trans('Save').'</button></div></form>';
+	print '<tr><td>'.$langs->trans('Description').'</td><td><textarea name="description">'.dol_escape_htmltag((string) $object->description).'</textarea></td></tr></table><div class="center"><input type="submit" class="button button-save" value="'.$langs->trans('Save').'"> <a class="button button-cancel" href="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">'.$langs->trans('Cancel').'</a></div></form>';
 	llxFooter(); exit;
 }
 
-print load_fiche_titre($object->getNomUrl(1), '', 'wallet');
+$object->next_prev_filter = 'te.entity:=:'.$entity;
+$linkback = '<a href="portfolio_list.php?restore_lastsearch_values=1">'.$langs->trans('BackToList').'</a>';
+$morehtmlref = '<div class="refidno opacitymedium">'.dol_escape_htmltag((string) $object->label).'</div>';
+dol_banner_tab($object, 'id', $linkback, 1, 'rowid', 'ref', $morehtmlref, '', 0, '', dolivoucherStatusBadge($object->status, 'portfolio'));
 $summary = $object->getFinancialSummary();
 $balanceCheck = $service->checkPortfolioBalance((int) $object->id, $entity);
 if (!$balanceCheck['consistent']) {
@@ -155,9 +163,11 @@ if (!$exposureCheck['consistent']) {
 	setEventMessages($langs->trans('ErrorExposureReconciliation'), null, 'warnings');
 }
 print '<div class="fichecenter"><div class="fichehalfleft"><table class="border centpercent">';
-$fields = array('Ref' => $object->ref, 'Label' => $object->label, 'Type' => $langs->trans($object->type === 'INSTITUTIONAL' ? 'Institutional' : 'Donation'), 'Period' => $object->period_label, 'DateStart' => dol_print_date($object->date_start, 'day'), 'DateEnd' => dol_print_date($object->date_end, 'day'), 'Status' => dolivoucherStatusLabel($object->status));
+$fields = array('Ref' => $object->ref, 'Label' => $object->label, 'Type' => $langs->trans($object->type === 'INSTITUTIONAL' ? 'Institutional' : 'Donation'), 'Period' => $object->period_label, 'DateStart' => dol_print_date($object->date_start, 'day'), 'DateEnd' => dol_print_date($object->date_end, 'day'));
 foreach ($fields as $label => $value) print '<tr><td>'.$langs->trans($label).'</td><td>'.dol_escape_htmltag((string) $value).'</td></tr>';
-print '<tr><td>'.$langs->trans('FundingThirdParty').'</td><td>'.((int) $object->fk_soc > 0 ? '<a href="'.DOL_URL_ROOT.'/societe/card.php?socid='.(int) $object->fk_soc.'">#'.(int) $object->fk_soc.'</a>' : '').'</td></tr>';
+$fundingThirdParty = (int) $object->fk_soc > 0 ? $db->fetch_object($db->query('SELECT nom, code_client FROM '.$db->prefix().'societe WHERE rowid='.(int) $object->fk_soc.' AND entity IN (0, '.$entity.') LIMIT 1')) : false;
+$thirdPartyReference = $fundingThirdParty ? (string) ($fundingThirdParty->code_client ?: $fundingThirdParty->nom) : '';
+print '<tr><td>'.$langs->trans('FundingThirdParty').'</td><td>'.($fundingThirdParty ? '<a href="'.DOL_URL_ROOT.'/societe/card.php?socid='.(int) $object->fk_soc.'" title="'.dol_escape_htmltag((string) $fundingThirdParty->nom).'">'.dol_escape_htmltag($thirdPartyReference).'</a>' : '').'</td></tr>';
 print '</table></div><div class="fichehalfright"><table class="border centpercent">';
 $money = array(
 	'TotalFunding' => 'total_funding',
@@ -208,6 +218,7 @@ if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && (int) $object->st
 if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && (int) $object->status === DoliVoucherPortfolio::STATUS_VALIDATED) print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=activate&token='.newToken().'">'.$langs->trans('Activate').'</a>';
 if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && in_array((int) $object->status, array(1,2), true)) print '<a class="butAction" href="'.$_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&action=close&token='.newToken().'">'.$langs->trans('Close').'</a>';
 if ($user->hasRight('dolivoucher', 'voucher', 'write') && in_array((int) $object->status, array(1,2), true)) print '<a class="butAction" href="voucher_card.php?action=create&fk_portfolio='.(int) $object->id.'">'.$langs->trans('NewVoucher').'</a>';
+if ($user->hasRight('dolivoucher', 'series', 'generate') && in_array((int) $object->status, array(1,2), true)) print '<a class="butAction" href="series_card.php?action=create&fk_portfolio='.(int) $object->id.'">'.$langs->trans('NewVoucherSeries').'</a>';
 print '</div>';
 
 if ($user->hasRight('dolivoucher', 'portfolio', 'validate') && in_array((int) $object->status, array(1,2), true)) {
@@ -223,6 +234,18 @@ if ($action !== 'ask_transfer' && $user->hasRight('dolivoucher', 'transfer', 'wr
 	}
 	print '<br><form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="ask_transfer"><input type="hidden" name="id" value="'.(int) $object->id.'">';
 	print '<table class="border centpercent"><tr><td>'.$langs->trans('TransferRemainder').'</td><td>'.$form->selectarray('destination_id', $destinationOptions, 0, $langs->trans('DestinationPortfolio'), 0, 0, '', 0, 0, 0, '', 'minwidth300').'</td><td><input name="amount" required placeholder="0.00"></td><td><input name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction" href="#" onclick="this.closest(\'form\').requestSubmit(); return false;">'.$langs->trans('ConfirmTransfer').'</a></div></td></tr></table></form>';
+}
+if ($user->hasRight('dolivoucher', 'series', 'read')) {
+	print '<br>'.load_fiche_titre($langs->trans('VoucherSeries'), '', 'layer-group');
+	$resSeries = $db->query('SELECT rowid, ref, label, generated_count, printed_count, status FROM '.$db->prefix().'dolivoucher_series WHERE entity='.$entity.' AND fk_portfolio='.(int) $object->id.' ORDER BY rowid DESC LIMIT 100');
+	print '<div class="div-table-responsive"><table class="tagtable liste"><tr class="liste_titre"><th>'.$langs->trans('Ref').'</th><th class="right">'.$langs->trans('Quantity').'</th><th>'.$langs->trans('PrintCoverage').'</th><th>'.$langs->trans('Status').'</th></tr>';
+	$hasSeries = false;
+	while ($resSeries && ($seriesRow = $db->fetch_object($resSeries))) {
+		$hasSeries = true;
+		print '<tr class="oddeven"><td><a href="series_card.php?id='.(int) $seriesRow->rowid.'" title="'.dol_escape_htmltag((string) ($seriesRow->label ?: $seriesRow->ref)).'">'.dol_escape_htmltag($seriesRow->ref).'</a></td><td class="right">'.(int) $seriesRow->generated_count.'</td><td>'.(int) $seriesRow->printed_count.' / '.(int) $seriesRow->generated_count.'</td><td>'.$langs->trans(dolivoucherSeriesStatuses()[(int) $seriesRow->status] ?? 'Unknown').'</td></tr>';
+	}
+	if (!$hasSeries) print '<tr class="oddeven"><td colspan="4" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+	print '</table></div>';
 }
 print '<br>'.load_fiche_titre($langs->trans('OperationJournal'), '', 'list');
 dolivoucherPrintOperations($db, $entity, (int) $object->id);

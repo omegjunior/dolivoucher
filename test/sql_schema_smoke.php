@@ -31,12 +31,21 @@ try {
 		throw new RuntimeException('Unable to select isolated schema');
 	}
 	$files = array(
-		'llx_dolivoucher_operation.sql',
 		'llx_dolivoucher_portfolio.sql',
+		'llx_dolivoucher_sequence.sql',
+		'llx_dolivoucher_series.sql',
 		'llx_dolivoucher_voucher.sql',
-		'llx_dolivoucher_operation.key.sql',
+		'llx_dolivoucher_voucher_phase2.sql',
+		'llx_dolivoucher_operation.sql',
+		'llx_dolivoucher_series_event.sql',
+		'llx_dolivoucher_series_event_voucher.sql',
 		'llx_dolivoucher_portfolio.key.sql',
+		'llx_dolivoucher_sequence.key.sql',
+		'llx_dolivoucher_series.key.sql',
 		'llx_dolivoucher_voucher.key.sql',
+		'llx_dolivoucher_operation.key.sql',
+		'llx_dolivoucher_series_event.key.sql',
+		'llx_dolivoucher_series_event_voucher.key.sql',
 	);
 	foreach ($files as $file) {
 		$sql = (string) file_get_contents(dirname(__DIR__).'/sql/'.$file);
@@ -46,12 +55,12 @@ try {
 			}
 		}
 	}
-	$result = $db->query("SELECT COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema='".$db->escape($testDatabase)."' AND table_name IN ('llx_dolivoucher_portfolio','llx_dolivoucher_voucher','llx_dolivoucher_operation')");
+	$result = $db->query("SELECT COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema='".$db->escape($testDatabase)."' AND table_name IN ('llx_dolivoucher_portfolio','llx_dolivoucher_voucher','llx_dolivoucher_operation','llx_dolivoucher_series','llx_dolivoucher_sequence','llx_dolivoucher_series_event','llx_dolivoucher_series_event_voucher')");
 	$row = $result ? $db->fetch_object($result) : false;
-	if (!$row || (int) $row->table_count !== 3) {
-		throw new RuntimeException('Schema smoke test did not create all three tables');
+	if (!$row || (int) $row->table_count !== 7) {
+		throw new RuntimeException('Schema smoke test did not create all seven tables');
 	}
-	echo "DoliVoucher SQL schema smoke test: OK (3 tables).\n";
+	echo "DoliVoucher SQL schema smoke test: OK (7 tables).\n";
 } finally {
 	$db->query('USE `'.$db->escape($originalDatabase).'`');
 	if ($created) {

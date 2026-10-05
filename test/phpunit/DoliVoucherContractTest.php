@@ -138,13 +138,16 @@ final class DoliVoucherContractTest extends TestCase
 
 	public function testListsAndCardInputsUseDolibarrUiConventions(): void
 	{
-		foreach (array('portfolio_list.php', 'voucher_list.php', 'operation_list.php') as $page) {
+		foreach (array('portfolio_list.php', 'voucher_list.php', 'series_list.php', 'operation_list.php') as $page) {
 			$contents = $this->read($page);
 			self::assertStringContainsString('class="tagtable liste"', $contents, $page);
 			self::assertStringContainsString('print_liste_field_titre(', $contents, $page);
 			self::assertStringContainsString('class="liste_titre button_search"', $contents, $page);
 			self::assertStringContainsString('class="liste_titre button_removefilter', $contents, $page);
 			self::assertStringContainsString("GETPOST('button_removefilter_x', 'alpha')", $contents, $page);
+			self::assertStringContainsString("GETPOST('sortfield', 'alphanohtml')", $contents, $page);
+			self::assertStringContainsString("GETPOST('sortorder', 'alpha')", $contents, $page);
+			self::assertStringContainsString('$sortfield, $sortorder', $contents, $page);
 		}
 		foreach (array('portfolio_list.php', 'voucher_list.php') as $page) {
 			$contents = $this->read($page);
@@ -157,6 +160,21 @@ final class DoliVoucherContractTest extends TestCase
 
 		$portfolioCard = $this->read('portfolio_card.php');
 		$voucherCard = $this->read('voucher_card.php');
+		$seriesCard = $this->read('series_card.php');
+		foreach (array($portfolioCard, $voucherCard, $seriesCard) as $card) {
+			self::assertStringContainsString('dol_banner_tab($object', $card);
+			self::assertStringContainsString("\$object->next_prev_filter = 'te.entity:=:'.\$entity;", $card);
+			self::assertStringContainsString("trans('BackToList')", $card);
+			self::assertStringContainsString('dolivoucherStatusBadge($object->status', $card);
+		}
+		$statusHelper = $this->read('lib/dolivoucher.lib.php');
+		self::assertStringContainsString("0 => 'status0'", $statusHelper);
+		self::assertStringContainsString("2 => 'status4'", $statusHelper);
+		self::assertStringContainsString("4 => 'status6'", $statusHelper);
+		self::assertStringContainsString("6 => 'status8'", $statusHelper);
+		self::assertStringContainsString("9 => 'status9'", $statusHelper);
+		self::assertStringContainsString("public \$picto = 'fontawesome_wallet';", $this->read('class/dolivoucherportfolio.class.php'));
+		self::assertStringContainsString("public \$picto = 'fontawesome_layer-group';", $this->read('class/dolivoucherseries.class.php'));
 		self::assertStringContainsString("selectDate(-1, 'date_start'", $portfolioCard);
 		self::assertStringContainsString("selectDate(\$object->date_start ?: -1, 'date_start'", $portfolioCard);
 		self::assertStringContainsString("selectarray('type', \$portfolioTypeOptions", $portfolioCard);
@@ -172,6 +190,15 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringNotContainsString('<select name="fk_portfolio"', $voucherCard);
 		self::assertStringNotContainsString('type="datetime-local"', $voucherCard);
 		self::assertStringContainsString('<input type="submit" class="button button-save" value="', $voucherCard);
+		self::assertStringContainsString("<input type=\"submit\" class=\"button button-save\" value=\"'.\$langs->trans('Save').'\">", $voucherCard);
+		self::assertStringNotContainsString('<button class="button button-save">', $voucherCard);
+		self::assertStringContainsString("<input type=\"submit\" class=\"button button-save\" value=\"'.\$langs->trans('Save').'\">", $portfolioCard);
+		self::assertStringNotContainsString('<button class="button button-save">', $portfolioCard);
+		self::assertStringContainsString('class="button button-cancel"', $voucherCard);
+		self::assertStringContainsString('class="button button-cancel"', $portfolioCard);
+		self::assertGreaterThanOrEqual(5, substr_count($voucherCard, "header('Location: '.\$_SERVER['PHP_SELF'].'?id='.\$id);"));
+		self::assertGreaterThanOrEqual(4, substr_count($portfolioCard, "header('Location: '.\$_SERVER['PHP_SELF'].'?id='.\$id);"));
+		self::assertSame(19, substr_count($this->read('class/dolivoucherportfolio.class.php'), "'enabled' => 1"));
 		self::assertStringContainsString("action=activate&token='.newToken()", $voucherCard);
 		self::assertStringContainsString("action=activate&token='.newToken()", $portfolioCard);
 		self::assertStringNotContainsString("str_starts_with(\$action, 'confirm_')", $voucherCard);
@@ -206,13 +233,18 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("if (\$action !== 'ask_transfer' && \$user->hasRight('dolivoucher', 'transfer', 'write')", $portfolioCard);
 
 		$portfolioList = $this->read('portfolio_list.php');
+		self::assertStringContainsString("'fontawesome_wallet'", $portfolioList);
 		self::assertStringContainsString("selectarray('search_type', \$portfolioTypeOptions", $portfolioList);
 		self::assertStringContainsString("selectarray('search_status', \$portfolioStatusOptions", $portfolioList);
+		self::assertStringContainsString("selectarray('search_fk_soc', \$thirdPartyOptions", $portfolioList);
+		self::assertStringNotContainsString('type="number" name="search_fk_soc"', $portfolioList);
 		self::assertStringContainsString("\$searchType = \$searchType === '-1' ? '' : \$searchType;", $portfolioList);
 		self::assertStringContainsString("\$searchStatus = ((int) \$searchStatus === -1) ? '' : \$searchStatus;", $portfolioList);
 
 		$voucherList = $this->read('voucher_list.php');
 		self::assertStringContainsString("selectarray('search_status', \$voucherStatusOptions", $voucherList);
+		self::assertStringContainsString("selectarray('search_portfolio', \$portfolioOptions", $voucherList);
+		self::assertStringNotContainsString('type="number" name="search_portfolio"', $voucherList);
 		self::assertStringContainsString("\$searchStatus = ((int) \$searchStatus === -1) ? '' : \$searchStatus;", $voucherList);
 		self::assertStringContainsString('name="search_balance"', $voucherList);
 		self::assertStringContainsString("natural_search('v.current_balance', \$searchBalance, 1)", $voucherList);
@@ -221,19 +253,84 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString('v.date_expiration', $voucherList);
 		self::assertStringNotContainsString('type="date"', $voucherList);
 
+		$seriesList = $this->read('series_list.php');
+		self::assertStringContainsString("'fontawesome_layer-group'", $seriesList);
+
 		$operationList = $this->read('operation_list.php');
 		self::assertStringContainsString("selectDate(\$dateFrom ?: -1, 'date_from'", $operationList);
 		self::assertStringContainsString("selectDate(\$dateTo ?: -1, 'date_to'", $operationList);
+		self::assertStringContainsString('<td class="liste_titre center">', $operationList);
+		self::assertGreaterThanOrEqual(2, substr_count($operationList, '<div class="nowrapfordate">'));
 		self::assertStringNotContainsString('type="date"', $operationList);
 		self::assertStringContainsString("include DOL_DOCUMENT_ROOT.'/core/actions_changeselectedfields.inc.php'", $operationList);
 		self::assertStringContainsString("multiSelectArrayWithCheckbox('selectedfields', \$arrayfields, \$contextpage)", $operationList);
 		self::assertStringContainsString("selectarray('search_type', \$operationTypes", $operationList);
+		self::assertStringContainsString("selectarray('search_portfolio', \$portfolioOptions", $operationList);
+		self::assertStringContainsString("selectarray('search_voucher', \$voucherOptions", $operationList);
+		self::assertStringNotContainsString('type="number" name="search_portfolio"', $operationList);
+		self::assertStringNotContainsString('type="number" name="search_voucher"', $operationList);
 		self::assertStringContainsString('name="search_amount"', $operationList);
 		self::assertStringContainsString('name="search_reason"', $operationList);
 		self::assertStringContainsString('class="liste_titre button_removefilter reposition"', $operationList);
 		self::assertStringContainsString('$db->plimit($limit + 1, $offset)', $operationList);
 		self::assertStringContainsString('$num = $resql ? $db->num_rows($resql) : 0;', $operationList);
 		self::assertMatchesRegularExpression('/print_barre_liste\([^;]*\$num[^;]*\$limit\);/', $operationList);
+	}
+
+	public function testSeriesNumberingAndGenerationContracts(): void
+	{
+		$service = $this->read('class/dolivoucherseriesservice.class.php');
+		$model = $this->read('core/modules/dolivoucher/mod_dolivoucherseries_standard.php');
+		self::assertStringContainsString("sprintf('DVS-%04d-%06d'", $model);
+		self::assertStringContainsString("sprintf('%06d', \$number)", $service);
+		self::assertStringContainsString('SELECT rowid, next_value', $service);
+		self::assertStringContainsString('FOR UPDATE', $service);
+		self::assertStringContainsString('INSERT IGNORE INTO ', $service);
+		self::assertStringNotContainsString('MAX(ref)', $service);
+		self::assertStringContainsString('generation_key', $service);
+		self::assertStringContainsString('STATUS_DRAFT', $service);
+		self::assertStringContainsString("'0.00000000'", $this->voucher);
+		self::assertStringContainsString('fk_series INTEGER NULL', $this->read('sql/llx_dolivoucher_voucher.sql'));
+		self::assertStringContainsString('uk_dolivoucher_series_ref_entity (entity, ref)', $this->read('sql/llx_dolivoucher_series.key.sql'));
+	}
+
+	public function testMaterialJournalAndPrintContracts(): void
+	{
+		$service = $this->read('class/dolivoucherseriesservice.class.php');
+		$event = $this->read('class/dolivoucherseriesevent.class.php');
+		$pdf = $this->read('core/modules/dolivoucher/doc/pdf_dolivoucher_a4.modules.php');
+		$download = $this->read('series_document.php');
+		self::assertStringContainsString("write1DBarcode((string) \$voucher->barcode, 'C128'", $pdf);
+		self::assertStringContainsString("hash_file('sha256'", $service);
+		self::assertStringContainsString('ErrorMixedPrintSelection', $service);
+		self::assertStringContainsString('ErrorReprintReasonRequired', $service);
+		self::assertStringContainsString('ErrorReprintPermissionDenied', $service);
+		self::assertStringContainsString("if (\$file !== '' && is_file(\$file)) @unlink(\$file)", $service);
+		self::assertStringContainsString('TYPE_PRINT_COMPLEMENT', $event);
+		self::assertStringContainsString('ErrorMaterialJournalReadOnly', $event);
+		self::assertStringContainsString('public function updateCommon(', $event);
+		self::assertStringContainsString('public function deleteCommon(', $event);
+		self::assertStringNotContainsString('dol_send_file(', $download);
+		self::assertStringContainsString("require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php'", $download);
+		self::assertStringContainsString("top_httphead('application/pdf')", $download);
+		self::assertStringContainsString('readfileLowMemory(dol_osencode($fileReal))', $download);
+	}
+
+	public function testSeriesUiUsesNativeDolibarrConventionsAndRights(): void
+	{
+		$list = $this->read('series_list.php');
+		$card = $this->read('series_card.php');
+		$descriptor = $this->read('core/modules/modDoliVoucher.class.php');
+		self::assertStringContainsString('class="tagtable liste"', $list);
+		self::assertStringContainsString("multiSelectArrayWithCheckbox('selectedfields', \$arrayfields, \$contextpage)", $list);
+		self::assertStringContainsString('button_removefilter', $list);
+		self::assertStringContainsString("selectarray('search_portfolio', \$portfolioOptions, \$searchPortfolio, 1", $list);
+		self::assertStringContainsString("selectDate(\$searchGenerationDate ?: -1, 'search_generation_date'", $list);
+		self::assertStringContainsString("selectarray('fk_portfolio', \$portfolioOptions, GETPOSTINT('fk_portfolio'), 1", $card);
+		self::assertStringContainsString("selectDate(-1, 'date_expiration'", $card);
+		self::assertStringContainsString("(bool) \$user->hasRight('dolivoucher', 'series', 'reprint')", $card);
+		self::assertStringContainsString('->formconfirm(', $card);
+		foreach (array('series", "read', 'series", "generate', "'series', 'print'", "'series', 'reprint'", "'series', 'prepare'", "'series', 'deliver'") as $right) self::assertStringContainsString($right, $descriptor.$card);
 	}
 
 	private function read(string $relative): string

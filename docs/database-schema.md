@@ -8,7 +8,23 @@ Stores the entity, unique entity/reference pair, label, type, optional third par
 
 ## `llx_dolivoucher_voucher`
 
-Stores the entity, portfolio, unique entity/serial pair, optional unique entity/barcode pair, face value, materialized voucher balance, lifecycle status, beneficiary and dates. The portfolio foreign key prevents an orphan.
+Stores the entity, portfolio, nullable series, unique entity/serial pair, optional unique entity/barcode pair, face value, materialized voucher balance, lifecycle status, beneficiary and dates. `fk_series` is nullable so existing and unit-created vouchers remain valid. Series/portfolio/entity consistency is enforced by the service.
+
+## `llx_dolivoucher_series`
+
+Stores the entity, immutable reference, idempotency key, frozen sequence year, portfolio, label, requested quantity and face value, optional expiration, administrative status and calculated material coverage counters. References and generation keys are unique per entity.
+
+## `llx_dolivoucher_sequence`
+
+Transactional counter isolated by entity, sequence type and year. The unique scope and `SELECT ... FOR UPDATE` prevent concurrent duplication. A rollback restores the counter reservation.
+
+## `llx_dolivoucher_series_event`
+
+Append-only material journal for generation, first print, complement, reprint, preparation and delivery. Print events retain revision, controlled relative file path, SHA-256, selection summary, count, reason, user and timestamp. Its application object rejects create, update and delete; writes are private to the service.
+
+## `llx_dolivoucher_series_event_voucher`
+
+Append-only event detail linking each material event to its exact vouchers. It provides unambiguous print/preparation/delivery coverage for whole, range and explicit selections without parsing textual lists. A unique event/voucher index prevents duplicates.
 
 ## `llx_dolivoucher_operation`
 
@@ -35,3 +51,5 @@ Exposure values are calculated, not stored:
 The exposure reconciliation aggregates each voucher's journal reconstruction under its current status. Block and unblock entries have zero monetary effect, so they only move an unchanged balance between the immediately redeemable and blocked reporting categories.
 
 Indexes cover entity/status, references, third party, portfolio, voucher, operation type/UUID, dates, expiration and external reference. Entity compatibility is enforced in the service because cross-table composite foreign keys would conflict with Dolibarr entity-sharing practices.
+
+Phase 2 additionally indexes series references, generation keys, portfolio/status/year, sequence scope, material event UUID/revision/type/date, and event coverage. The replayable `llx_dolivoucher_voucher_phase2.sql` migration adds nullable `fk_series` without rewriting historical records or replacing Phase 1 unique constraints.

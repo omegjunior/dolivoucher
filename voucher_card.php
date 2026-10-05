@@ -51,8 +51,13 @@ if ($action === 'add') {
 	$object->beneficiary_name = GETPOST('beneficiary_name', 'restricthtml');
 	$object->date_expiration = GETPOSTINT('date_expirationyear') > 0 ? dol_mktime(GETPOSTINT('date_expirationhour'), GETPOSTINT('date_expirationmin'), 0, GETPOSTINT('date_expirationmonth'), GETPOSTINT('date_expirationday'), GETPOSTINT('date_expirationyear'), 'tzuserrel') : null;
 	$object->note_private = GETPOST('note_private', 'restricthtml');
-	if ($object->update($user) > 0) setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
-	else setEventMessages($langs->trans($object->error ?: 'ErrorVoucherUpdateFailed'), null, 'errors');
+	if ($object->update($user) > 0) {
+		setEventMessages($langs->trans('OperationSuccessful'), null, 'mesgs');
+		header('Location: '.$_SERVER['PHP_SELF'].'?id='.$id);
+		exit;
+	}
+	setEventMessages($langs->trans($object->error ?: 'ErrorVoucherUpdateFailed'), null, 'errors');
+	$action = 'edit';
 } elseif ($id > 0 && in_array($action, array('confirm_prepare', 'confirm_activate', 'confirm_cancel', 'confirm_expire'), true) && GETPOST('confirm', 'alpha') === 'yes') {
 	if ($action === 'confirm_cancel') {
 		if (!$user->hasRight('dolivoucher', 'voucher', 'cancel')) accessforbidden();
@@ -109,22 +114,29 @@ if ($action === 'create' || ($action === 'add' && $id <= 0)) {
 
 if ($action === 'edit' && in_array((int) $object->status, array(0,1), true) && $user->hasRight('dolivoucher', 'voucher', 'write')) {
 	print load_fiche_titre($langs->trans('EditVoucher'), '', 'ticket');
-	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="'.(int) $object->id.'"><table class="border centpercent">';
+	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="update"><input type="hidden" name="id" value="'.(int) $object->id.'"><table class="border centpercent">';
 	print '<tr><td>'.$langs->trans('Portfolio').'</td><td>'.$form->selectForForms($portfolioSelectDescriptor, 'fk_portfolio', (int) $object->fk_portfolio, 'SelectPortfolio', '', '', 'minwidth300', 'required', 1).'</td></tr>';
 	print '<tr><td>'.$langs->trans('SerialNumber').'</td><td><input name="ref" value="'.dol_escape_htmltag($object->ref).'" required></td></tr><tr><td>'.$langs->trans('Barcode').'</td><td><input name="barcode" value="'.dol_escape_htmltag((string) $object->barcode).'"></td></tr><tr><td>'.$langs->trans('Label').'</td><td><input name="label" value="'.dol_escape_htmltag((string) $object->label).'"></td></tr>';
 	print '<tr><td>'.$langs->trans('InitialAmount').'</td><td><input name="initial_amount" value="'.dol_escape_htmltag((string) $object->initial_amount).'" required></td></tr><tr><td>'.$langs->trans('Beneficiary').'</td><td><input name="beneficiary_name" value="'.dol_escape_htmltag((string) $object->beneficiary_name).'"></td></tr>';
 	print '<tr><td>'.$langs->trans('ExpirationDate').'</td><td>'.$form->selectDate($object->date_expiration ?: -1, 'date_expiration', 1, 1, 1, '', 1, 1).'</td></tr>';
 	print '<tr><td>'.$langs->trans('NotePrivate').'</td><td><textarea name="note_private">'.dol_escape_htmltag((string) $object->note_private).'</textarea></td></tr>';
-	print '</table><div class="center"><button class="button button-save">'.$langs->trans('Save').'</button></div></form>';
+	print '</table><div class="center"><input type="submit" class="button button-save" value="'.$langs->trans('Save').'"> <a class="button button-cancel" href="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">'.$langs->trans('Cancel').'</a></div></form>';
 	llxFooter(); exit;
 }
 
-print load_fiche_titre($object->getNomUrl(1), '', 'ticket');
+$object->next_prev_filter = 'te.entity:=:'.$entity;
+$linkback = '<a href="voucher_list.php?restore_lastsearch_values=1">'.$langs->trans('BackToList').'</a>';
+$morehtmlref = empty($object->label) ? '' : '<div class="refidno opacitymedium">'.dol_escape_htmltag((string) $object->label).'</div>';
+dol_banner_tab($object, 'id', $linkback, 1, 'rowid', 'ref', $morehtmlref, '', 0, '', dolivoucherStatusBadge($object->status, 'voucher'));
 $check = $service->checkVoucherBalance((int) $object->id, $entity);
 if (!$check['consistent']) setEventMessages($langs->trans('ErrorBalanceReconciliation', $check['materialized'], $check['reconstructed']), null, 'warnings');
 print '<div class="fichecenter"><table class="border centpercent">';
-$rows = array('SerialNumber' => $object->ref, 'Barcode' => $object->barcode, 'Portfolio' => '<a href="portfolio_card.php?id='.(int) $object->fk_portfolio.'">#'.(int) $object->fk_portfolio.'</a>', 'InitialAmount' => price($object->initial_amount, 0, $langs, 1, -1, -1, 'XOF'), 'CurrentBalance' => price($object->current_balance, 0, $langs, 1, -1, -1, 'XOF'), 'Status' => dolivoucherStatusLabel($object->status, true), 'Beneficiary' => $object->beneficiary_name, 'IssueDate' => dol_print_date($object->date_issue, 'dayhour'), 'ActivationDate' => dol_print_date($object->date_activation, 'dayhour'), 'ExpirationDate' => dol_print_date($object->date_expiration, 'dayhour'));
-foreach ($rows as $label => $value) print '<tr><td>'.$langs->trans($label).'</td><td>'.($label === 'Portfolio' ? $value : dol_escape_htmltag((string) $value)).'</td></tr>';
+$linkedObjectsSql = 'SELECT p.ref AS portfolio_ref, p.label AS portfolio_label, s.ref AS series_ref, s.label AS series_label FROM '.$db->prefix().'dolivoucher_portfolio p LEFT JOIN '.$db->prefix().'dolivoucher_series s ON s.rowid='.(int) $object->fk_series.' AND s.entity=p.entity WHERE p.rowid='.(int) $object->fk_portfolio.' AND p.entity='.$entity.' LIMIT 1';
+$linkedObjects = $db->fetch_object($db->query($linkedObjectsSql));
+$portfolioLink = $linkedObjects ? '<a href="portfolio_card.php?id='.(int) $object->fk_portfolio.'" title="'.dol_escape_htmltag((string) ($linkedObjects->portfolio_label ?: $linkedObjects->portfolio_ref)).'">'.dol_escape_htmltag((string) $linkedObjects->portfolio_ref).'</a>' : '';
+$seriesLink = empty($object->fk_series) || !$linkedObjects || empty($linkedObjects->series_ref) ? '' : '<a href="series_card.php?id='.(int) $object->fk_series.'" title="'.dol_escape_htmltag((string) ($linkedObjects->series_label ?: $linkedObjects->series_ref)).'">'.dol_escape_htmltag((string) $linkedObjects->series_ref).'</a>';
+$rows = array('SerialNumber' => $object->ref, 'Barcode' => $object->barcode, 'Portfolio' => $portfolioLink, 'Series' => $seriesLink, 'InitialAmount' => price($object->initial_amount, 0, $langs, 1, -1, -1, 'XOF'), 'CurrentBalance' => price($object->current_balance, 0, $langs, 1, -1, -1, 'XOF'), 'Beneficiary' => $object->beneficiary_name, 'IssueDate' => dol_print_date($object->date_issue, 'dayhour'), 'ActivationDate' => dol_print_date($object->date_activation, 'dayhour'), 'ExpirationDate' => dol_print_date($object->date_expiration, 'dayhour'));
+foreach ($rows as $label => $value) print '<tr><td>'.$langs->trans($label).'</td><td>'.(in_array($label, array('Portfolio', 'Series'), true) ? $value : dol_escape_htmltag((string) $value)).'</td></tr>';
 print '</table></div>';
 
 $portfolioState = $db->fetch_object($db->query('SELECT status, available_unallocated_balance FROM '.$db->prefix().'dolivoucher_portfolio WHERE rowid='.(int) $object->fk_portfolio.' AND entity='.$entity.' LIMIT 1'));

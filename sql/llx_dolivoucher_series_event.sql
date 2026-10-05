@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS llx_dolivoucher_series_event (
+	rowid INTEGER AUTO_INCREMENT PRIMARY KEY,
+	entity INTEGER DEFAULT 1 NOT NULL,
+	fk_series INTEGER NOT NULL,
+	event_uuid VARCHAR(36) NOT NULL,
+	event_type VARCHAR(32) NOT NULL,
+	revision INTEGER NULL,
+	selection_type VARCHAR(16) NULL,
+	selection_summary VARCHAR(255) NULL,
+	document_name VARCHAR(255) NULL,
+	document_path VARCHAR(512) NULL,
+	document_sha256 CHAR(64) NULL,
+	voucher_count INTEGER DEFAULT 0 NOT NULL,
+	reason VARCHAR(500) NULL,
+	note_private TEXT NULL,
+	date_event DATETIME NOT NULL,
+	date_creation DATETIME NOT NULL,
+	fk_user_creat INTEGER NOT NULL,
+	reversal_of INTEGER NULL
+) ENGINE=innodb;
