@@ -9,10 +9,13 @@ if (getenv('DOLIVOUCHER_INTEGRATION_SMOKE') !== '1') {
 }
 
 require_once dirname(__DIR__, 3).'/master.inc.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 require_once dirname(__DIR__).'/class/dolivoucherportfolio.class.php';
 require_once dirname(__DIR__).'/class/dolivouchervoucher.class.php';
 require_once dirname(__DIR__).'/class/dolivoucheroperation.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherservice.class.php';
+require_once dirname(__DIR__).'/class/dolivoucherseriesservice.class.php';
+require_once dirname(__DIR__).'/class/dolivoucherseriesevent.class.php';
 
 /** @throws RuntimeException */
 function dvExpect(bool $condition, string $message): void
@@ -51,7 +54,7 @@ function dvVoucher(DoliDB $db, DoliVoucherService $service, User $user, int $por
 	return $service->createVoucher($voucher, $user, 'integration smoke');
 }
 
-global $conf, $db, $user;
+global $conf, $db, $user, $mysoc;
 if (empty($user->id)) {
 	$user->fetch(1);
 }
@@ -61,19 +64,28 @@ $testDatabase = 'dolivoucher_integration_test_'.date('YmdHis').'_'.bin2hex(rando
 if (!preg_match('/^dolivoucher_integration_test_[0-9]{14}_[a-f0-9]{6}$/', $testDatabase)) throw new RuntimeException('Unsafe test database name');
 $created = false;
 $assertions = 0;
+$testOutputDir = sys_get_temp_dir().'/dolivoucher_integration_'.bin2hex(random_bytes(6));
+$originalDoliVoucherConf = isset($conf->dolivoucher) && is_object($conf->dolivoucher) ? clone $conf->dolivoucher : null;
+$originalCompanyLogo = isset($mysoc->logo) ? $mysoc->logo : '';
 
 try {
 	dvExpect((bool) $db->query('CREATE DATABASE `'.$testDatabase.'` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'), 'Cannot create isolated database');
 	$created = true;
 	dvExpect((bool) $db->query('USE `'.$testDatabase.'`'), 'Cannot select isolated database');
-	foreach (array('llx_dolivoucher_operation.sql', 'llx_dolivoucher_portfolio.sql', 'llx_dolivoucher_voucher.sql', 'llx_dolivoucher_operation.key.sql', 'llx_dolivoucher_portfolio.key.sql', 'llx_dolivoucher_voucher.key.sql') as $file) {
+	foreach (array('llx_dolivoucher_portfolio.sql', 'llx_dolivoucher_sequence.sql', 'llx_dolivoucher_series.sql', 'llx_dolivoucher_voucher.sql', 'llx_dolivoucher_voucher_phase2.sql', 'llx_dolivoucher_operation.sql', 'llx_dolivoucher_series_event.sql', 'llx_dolivoucher_series_event_voucher.sql', 'llx_dolivoucher_portfolio.key.sql', 'llx_dolivoucher_sequence.key.sql', 'llx_dolivoucher_series.key.sql', 'llx_dolivoucher_voucher.key.sql', 'llx_dolivoucher_operation.key.sql', 'llx_dolivoucher_series_event.key.sql', 'llx_dolivoucher_series_event_voucher.key.sql') as $file) {
 		$sql = (string) file_get_contents(dirname(__DIR__).'/sql/'.$file);
 		foreach (array_filter(array_map('trim', explode(';', $sql))) as $statement) dvExpect((bool) $db->query($statement), $file.': '.$db->lasterror());
 	}
 	dvExpect((bool) $db->query('CREATE TABLE llx_societe (rowid INTEGER PRIMARY KEY, entity INTEGER NOT NULL) ENGINE=innodb'), 'Cannot create test third-party table');
 	dvExpect((bool) $db->query('INSERT INTO llx_societe(rowid,entity) VALUES (10,1),(20,1)'), 'Cannot seed third parties');
+	dvExpect((bool) $db->query('CREATE TABLE llx_c_currencies (code_iso VARCHAR(3) PRIMARY KEY, label VARCHAR(64), unicode VARCHAR(8), active TINYINT NOT NULL DEFAULT 1) ENGINE=innodb'), 'Cannot create test currency table');
+	dvExpect((bool) $db->query("INSERT INTO llx_c_currencies(code_iso,label,unicode,active) VALUES ('XOF','CFA franc','F CFA',1)"), 'Cannot seed test currency');
 	$conf->entity = 1;
 	$service = new DoliVoucherService($db);
+	$conf->dolivoucher = $conf->dolivoucher ?? new stdClass();
+	$conf->dolivoucher->dir_output = $testOutputDir;
+	$conf->dolivoucher->multidir_output = array(1 => $testOutputDir);
+	$mysoc->logo = '';
 
 	dvExpect(dvPortfolio($db, $user, 'BAD-INST', DoliVoucherPortfolio::TYPE_INSTITUTIONAL, null) < 0, 'Institution without third party accepted'); $assertions++;
 	$donation = dvPortfolio($db, $user, 'DON-1', DoliVoucherPortfolio::TYPE_DONATION, null);
@@ -170,9 +182,70 @@ try {
 	$operation = new DoliVoucherOperation($db);
 	dvExpect($operation->update($user) < 0 && $operation->delete($user) < 0 && $operation->setValueFrom('amount', '1') < 0, 'Append-only API exposed mutation'); $assertions++;
 
+	$seriesService = new DoliVoucherSeriesService($db);
+	$seriesBalanceBefore = (string) dvOne($db, 'SELECT available_unallocated_balance AS amount FROM llx_dolivoucher_portfolio WHERE rowid='.$source)->amount;
+	$generationKey = DoliVoucherService::uuid();
+	$seriesId = $seriesService->generate(array('generation_key' => $generationKey, 'fk_portfolio' => $source, 'label' => 'Smoke batch', 'quantity' => 3, 'face_value' => '100', 'date_expiration' => dol_now() + 86400), 1, $user);
+	dvExpect($seriesId > 0, 'Series generation failed'); $assertions++;
+	dvExpect($seriesService->generate(array('generation_key' => $generationKey, 'fk_portfolio' => $source, 'label' => 'Replay', 'quantity' => 3, 'face_value' => '100'), 1, $user) === $seriesId, 'Generation replay was not idempotent'); $assertions++;
+	$series = dvOne($db, 'SELECT ref, generated_count, printed_count, status FROM llx_dolivoucher_series WHERE rowid='.$seriesId.' AND entity=1');
+	dvExpect((bool) preg_match('/^DVS-[0-9]{4}-[0-9]{6}$/', (string) $series->ref) && (int) $series->generated_count === 3, 'Series reference or count invalid'); $assertions++;
+	$seriesVouchersResult = $db->query('SELECT rowid, ref, barcode, status, current_balance, fk_series FROM llx_dolivoucher_voucher WHERE entity=1 AND fk_series='.$seriesId.' ORDER BY ref');
+	$seriesVoucherIds = array(); $seriesVoucherRows = array();
+	while ($seriesVouchersResult && ($seriesVoucher = $db->fetch_object($seriesVouchersResult))) { $seriesVoucherIds[] = (int) $seriesVoucher->rowid; $seriesVoucherRows[] = $seriesVoucher; }
+	dvExpect(count($seriesVoucherRows) === 3 && $seriesVoucherRows[0]->ref === $series->ref.'-000001' && $seriesVoucherRows[2]->ref === $series->ref.'-000003', 'Voucher local sequence invalid'); $assertions++;
+	foreach ($seriesVoucherRows as $seriesVoucher) dvExpect($seriesVoucher->barcode === $seriesVoucher->ref && (int) $seriesVoucher->status === DoliVoucherVoucher::STATUS_DRAFT && (string) $seriesVoucher->current_balance === '0.00000000' && (int) $seriesVoucher->fk_series === $seriesId, 'Generated voucher contract invalid');
+	$assertions++;
+	dvExpect((string) dvOne($db, 'SELECT available_unallocated_balance AS amount FROM llx_dolivoucher_portfolio WHERE rowid='.$source)->amount === $seriesBalanceBefore, 'Series generation changed a financial balance'); $assertions++;
+	dvExpect((int) dvOne($db, "SELECT COUNT(*) AS amount FROM llx_dolivoucher_series_event WHERE fk_series=".$seriesId." AND event_type='GENERATE'")->amount === 1, 'Generation event missing or duplicated'); $assertions++;
+	$sequenceYear = (int) dol_print_date(dol_now(), '%Y');
+	$nextSeriesRef = sprintf('DVS-%04d-000002', $sequenceYear);
+	dvExpect((bool) $db->query("INSERT INTO llx_dolivoucher_voucher (entity,fk_portfolio,fk_series,ref,barcode,initial_amount,current_balance,status,date_creation,fk_user_creat) VALUES (1,".$source.",NULL,'".$db->escape($nextSeriesRef."-000001")."','".$db->escape($nextSeriesRef."-000001")."',100,0,0,'".$db->idate(dol_now())."',".(int) $user->id.")"), 'Cannot seed forced series collision');
+	$rollbackKey = DoliVoucherService::uuid();
+	dvExpect($seriesService->generate(array('generation_key' => $rollbackKey, 'fk_portfolio' => $source, 'label' => 'Rollback batch', 'quantity' => 1, 'face_value' => '100'), 1, $user) < 0, 'Forced series collision did not fail'); $assertions++;
+	dvExpect((int) dvOne($db, "SELECT next_value FROM llx_dolivoucher_sequence WHERE entity=1 AND sequence_type='SERIES' AND sequence_year=".$sequenceYear)->next_value === 2, 'Failed generation consumed a series number'); $assertions++;
+	dvExpect((int) dvOne($db, "SELECT COUNT(*) AS amount FROM llx_dolivoucher_series WHERE entity=1 AND generation_key='".$db->escape($rollbackKey)."'")->amount === 0, 'Failed generation left a series'); $assertions++;
+	dvExpect((bool) $db->query("DELETE FROM llx_dolivoucher_voucher WHERE entity=1 AND fk_series IS NULL AND ref='".$db->escape($nextSeriesRef."-000001")."'"), 'Cannot remove forced collision fixture');
+	$secondSeriesId = $seriesService->generate(array('generation_key' => DoliVoucherService::uuid(), 'fk_portfolio' => $source, 'label' => 'Second batch', 'quantity' => 1, 'face_value' => '100'), 1, $user);
+	dvExpect($secondSeriesId > 0 && dvOne($db, 'SELECT ref FROM llx_dolivoucher_series WHERE rowid='.$secondSeriesId)->ref === $nextSeriesRef, 'Rolled-back series number was not reused'); $assertions++;
+	dvExpect((bool) $db->query("INSERT INTO llx_dolivoucher_portfolio (entity,ref,label,type,status,available_unallocated_balance,date_creation,fk_user_creat) VALUES (2,'ENTITY2-PORTFOLIO','Entity 2','DONATION',1,0,'".$db->idate(dol_now())."',".(int) $user->id.")"), 'Cannot seed entity 2 portfolio');
+	$entity2Portfolio = (int) $db->last_insert_id('llx_dolivoucher_portfolio');
+	$entity2Series = $seriesService->generate(array('generation_key' => DoliVoucherService::uuid(), 'fk_portfolio' => $entity2Portfolio, 'label' => 'Entity 2 batch', 'quantity' => 1, 'face_value' => '100'), 2, $user);
+	dvExpect($entity2Series > 0 && dvOne($db, 'SELECT ref FROM llx_dolivoucher_series WHERE rowid='.$entity2Series.' AND entity=2')->ref === sprintf('DVS-%04d-000001', $sequenceYear), 'Series counter is not isolated by entity'); $assertions++;
+	$crossEntitySeries = new DoliVoucherSeries($db);
+	dvExpect($crossEntitySeries->fetch($entity2Series) === 0, 'Series fetch crossed the current entity boundary'); $assertions++;
+	dvExpect($seriesService->printSelection($entity2Series, 1, array(), 'ALL', '', $user, $langs, false) === array(), 'Cross-entity print accepted'); $assertions++;
+
+	$firstPrint = $seriesService->printSelection($seriesId, 1, array($seriesVoucherIds[0]), 'LIST', '', $user, $langs, false);
+	dvExpect(!empty($firstPrint['file']) && is_file($firstPrint['file']) && $firstPrint['type'] === DoliVoucherSeriesEvent::TYPE_PRINT, 'Partial first print failed'); $assertions++;
+	$firstEvent = dvOne($db, 'SELECT document_sha256 FROM llx_dolivoucher_series_event WHERE rowid='.(int) $firstPrint['event_id']);
+	dvExpect(hash_file('sha256', $firstPrint['file']) === $firstEvent->document_sha256, 'PDF hash and event differ'); $assertions++;
+	$partialSeries = dvOne($db, 'SELECT printed_count,status FROM llx_dolivoucher_series WHERE rowid='.$seriesId);
+	dvExpect((int) $partialSeries->printed_count === 1 && (int) $partialSeries->status === DoliVoucherSeries::STATUS_GENERATED, 'Partial print incorrectly completed the series'); $assertions++;
+	$eventsBeforeMixed = (int) dvOne($db, 'SELECT COUNT(*) AS amount FROM llx_dolivoucher_series_event WHERE fk_series='.$seriesId)->amount;
+	dvExpect($seriesService->printSelection($seriesId, 1, array($seriesVoucherIds[0], $seriesVoucherIds[1]), 'LIST', '', $user, $langs, false) === array(), 'Mixed first/reprint selection accepted'); $assertions++;
+	dvExpect((int) dvOne($db, 'SELECT COUNT(*) AS amount FROM llx_dolivoucher_series_event WHERE fk_series='.$seriesId)->amount === $eventsBeforeMixed, 'Failed print appended an event'); $assertions++;
+	$complement = $seriesService->printSelection($seriesId, 1, array($seriesVoucherIds[1], $seriesVoucherIds[2]), 'RANGE', '', $user, $langs, false);
+	dvExpect(($complement['type'] ?? '') === DoliVoucherSeriesEvent::TYPE_PRINT_COMPLEMENT, 'First-print complement not identified'); $assertions++;
+	$printedSeries = dvOne($db, 'SELECT printed_count,status FROM llx_dolivoucher_series WHERE rowid='.$seriesId);
+	dvExpect((int) $printedSeries->printed_count === 3 && (int) $printedSeries->status === DoliVoucherSeries::STATUS_PRINTED, 'Full print coverage not applied'); $assertions++;
+	dvExpect($seriesService->printSelection($seriesId, 1, array($seriesVoucherIds[0]), 'LIST', 'damaged copy', $user, $langs, false) === array(), 'Reprint accepted without restrictive permission'); $assertions++;
+	$reprint = $seriesService->printSelection($seriesId, 1, array($seriesVoucherIds[0]), 'LIST', 'damaged copy', $user, $langs, true);
+	dvExpect(($reprint['type'] ?? '') === DoliVoucherSeriesEvent::TYPE_REPRINT, 'Authorized reprint failed'); $assertions++;
+	dvExpect($seriesService->prepareAll($seriesId, 1, 'physical preparation', $user) > 0 && $seriesService->deliverAll($seriesId, 1, 'made available', $user) > 0, 'Preparation or delivery failed'); $assertions++;
+	$deliveredSeries = dvOne($db, 'SELECT prepared_count, delivered_count, status FROM llx_dolivoucher_series WHERE rowid='.$seriesId);
+	dvExpect((int) $deliveredSeries->prepared_count === 3 && (int) $deliveredSeries->delivered_count === 3 && (int) $deliveredSeries->status === DoliVoucherSeries::STATUS_DELIVERED, 'Material coverage invalid'); $assertions++;
+	dvExpect((string) dvOne($db, 'SELECT available_unallocated_balance AS amount FROM llx_dolivoucher_portfolio WHERE rowid='.$source)->amount === $seriesBalanceBefore, 'Print/preparation/delivery changed a financial balance'); $assertions++;
+	$materialEvent = new DoliVoucherSeriesEvent($db);
+	dvExpect($materialEvent->update($user) < 0 && $materialEvent->delete($user) < 0, 'Material journal exposes mutation'); $assertions++;
+
 	echo 'DoliVoucher transactional integration smoke test: OK ('.$assertions." assertions).\n";
 } finally {
 	$conf->entity = $originalEntity;
+	$mysoc->logo = $originalCompanyLogo;
+	if ($originalDoliVoucherConf !== null) $conf->dolivoucher = $originalDoliVoucherConf;
 	$db->query('USE `'.$db->escape($originalDatabase).'`');
 	if ($created) $db->query('DROP DATABASE `'.$testDatabase.'`');
+	$deletedCount = 0;
+	if (is_dir($testOutputDir)) dol_delete_dir_recursive($testOutputDir, 0, 1, 0, $deletedCount, 0, 1);
 }

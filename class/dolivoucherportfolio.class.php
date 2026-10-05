@@ -18,30 +18,30 @@ class DoliVoucherPortfolio extends CommonObject
 	public $module = 'dolivoucher';
 	public $element = 'dolivoucher_portfolio';
 	public $table_element = 'dolivoucher_portfolio';
-	public $picto = 'wallet';
+	public $picto = 'fontawesome_wallet';
 	public $ismultientitymanaged = 1;
 	public $isextrafieldmanaged = 0;
 
 	public $fields = array(
-		'rowid' => array('type' => 'integer', 'label' => 'Id', 'notnull' => 1, 'visible' => -2),
-		'entity' => array('type' => 'integer', 'label' => 'Entity', 'notnull' => 1, 'visible' => -2),
-		'ref' => array('type' => 'varchar(128)', 'label' => 'Ref', 'notnull' => 1, 'visible' => 1, 'index' => 1, 'showoncombobox' => 1),
-		'label' => array('type' => 'varchar(255)', 'label' => 'Label', 'notnull' => 1, 'visible' => 1, 'showoncombobox' => 2),
-		'type' => array('type' => 'varchar(32)', 'label' => 'Type', 'notnull' => 1, 'visible' => 1),
-		'fk_soc' => array('type' => 'integer:Societe:societe/class/societe.class.php', 'label' => 'FundingThirdParty', 'visible' => 1),
-		'period_label' => array('type' => 'varchar(128)', 'label' => 'Period', 'visible' => 1),
-		'date_start' => array('type' => 'date', 'label' => 'DateStart', 'visible' => 1),
-		'date_end' => array('type' => 'date', 'label' => 'DateEnd', 'visible' => 1),
-		'status' => array('type' => 'integer', 'label' => 'Status', 'notnull' => 1, 'visible' => 1),
-		'available_unallocated_balance' => array('type' => 'price', 'label' => 'AvailableUnallocatedBalance', 'notnull' => 1, 'visible' => 1),
-		'description' => array('type' => 'text', 'label' => 'Description', 'visible' => 3),
-		'note_public' => array('type' => 'html', 'label' => 'NotePublic', 'visible' => 0),
-		'note_private' => array('type' => 'html', 'label' => 'NotePrivate', 'visible' => 0),
-		'date_creation' => array('type' => 'datetime', 'label' => 'DateCreation', 'notnull' => 1, 'visible' => -2),
-		'tms' => array('type' => 'timestamp', 'label' => 'DateModification', 'visible' => -2),
-		'fk_user_creat' => array('type' => 'integer:User:user/class/user.class.php', 'label' => 'UserAuthor', 'notnull' => 1, 'visible' => -2),
-		'fk_user_modif' => array('type' => 'integer:User:user/class/user.class.php', 'label' => 'UserModif', 'visible' => -2),
-		'import_key' => array('type' => 'varchar(14)', 'label' => 'ImportId', 'visible' => -2),
+		'rowid' => array('type' => 'integer', 'label' => 'Id', 'enabled' => 1, 'notnull' => 1, 'visible' => -2),
+		'entity' => array('type' => 'integer', 'label' => 'Entity', 'enabled' => 1, 'notnull' => 1, 'visible' => -2),
+		'ref' => array('type' => 'varchar(128)', 'label' => 'Ref', 'enabled' => 1, 'notnull' => 1, 'visible' => 1, 'index' => 1, 'showoncombobox' => 1),
+		'label' => array('type' => 'varchar(255)', 'label' => 'Label', 'enabled' => 1, 'notnull' => 1, 'visible' => 1, 'showoncombobox' => 2),
+		'type' => array('type' => 'varchar(32)', 'label' => 'Type', 'enabled' => 1, 'notnull' => 1, 'visible' => 1),
+		'fk_soc' => array('type' => 'integer:Societe:societe/class/societe.class.php', 'label' => 'FundingThirdParty', 'enabled' => 1, 'visible' => 1),
+		'period_label' => array('type' => 'varchar(128)', 'label' => 'Period', 'enabled' => 1, 'visible' => 1),
+		'date_start' => array('type' => 'date', 'label' => 'DateStart', 'enabled' => 1, 'visible' => 1),
+		'date_end' => array('type' => 'date', 'label' => 'DateEnd', 'enabled' => 1, 'visible' => 1),
+		'status' => array('type' => 'integer', 'label' => 'Status', 'enabled' => 1, 'notnull' => 1, 'visible' => 1),
+		'available_unallocated_balance' => array('type' => 'price', 'label' => 'AvailableUnallocatedBalance', 'enabled' => 1, 'notnull' => 1, 'visible' => 1),
+		'description' => array('type' => 'text', 'label' => 'Description', 'enabled' => 1, 'visible' => 3),
+		'note_public' => array('type' => 'html', 'label' => 'NotePublic', 'enabled' => 1, 'visible' => 0),
+		'note_private' => array('type' => 'html', 'label' => 'NotePrivate', 'enabled' => 1, 'visible' => 0),
+		'date_creation' => array('type' => 'datetime', 'label' => 'DateCreation', 'enabled' => 1, 'notnull' => 1, 'visible' => -2),
+		'tms' => array('type' => 'timestamp', 'label' => 'DateModification', 'enabled' => 1, 'visible' => -2),
+		'fk_user_creat' => array('type' => 'integer:User:user/class/user.class.php', 'label' => 'UserAuthor', 'enabled' => 1, 'notnull' => 1, 'visible' => -2),
+		'fk_user_modif' => array('type' => 'integer:User:user/class/user.class.php', 'label' => 'UserModif', 'enabled' => 1, 'visible' => -2),
+		'import_key' => array('type' => 'varchar(14)', 'label' => 'ImportId', 'enabled' => 1, 'visible' => -2),
 	);
 
 	public $rowid;

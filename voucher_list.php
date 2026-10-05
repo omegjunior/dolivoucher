@@ -17,6 +17,7 @@ $arrayfields = array(
 	'v.ref' => array('label' => 'SerialNumber', 'checked' => '1', 'position' => 10),
 	'v.barcode' => array('label' => 'Barcode', 'checked' => '1', 'position' => 20),
 	'p.ref' => array('label' => 'Portfolio', 'checked' => '1', 'position' => 30),
+	's.ref' => array('label' => 'Series', 'checked' => '1', 'position' => 35),
 	'v.initial_amount' => array('label' => 'InitialAmount', 'checked' => '1', 'position' => 40),
 	'v.current_balance' => array('label' => 'CurrentBalance', 'checked' => '1', 'position' => 50),
 	'v.status' => array('label' => 'Status', 'checked' => '1', 'position' => 60),
@@ -24,9 +25,15 @@ $arrayfields = array(
 );
 include DOL_DOCUMENT_ROOT.'/core/actions_changeselectedfields.inc.php';
 $selectedfields = $form->multiSelectArrayWithCheckbox('selectedfields', $arrayfields, $contextpage);
+$sortFields = array_fill_keys(array_keys($arrayfields), true);
+$sortfield = GETPOST('sortfield', 'alphanohtml');
+if (!isset($sortFields[$sortfield])) $sortfield = 'v.ref';
+$sortorder = strtoupper(GETPOST('sortorder', 'alpha'));
+if (!in_array($sortorder, array('ASC', 'DESC'), true)) $sortorder = 'ASC';
 $searchRef = GETPOST('search_ref', 'alphanohtml');
 $searchBarcode = GETPOST('search_barcode', 'alphanohtml');
 $searchPortfolio = GETPOSTINT('search_portfolio');
+$searchSeries = GETPOST('search_series', 'alphanohtml');
 $searchStatus = GETPOST('search_status', 'int');
 $searchBalance = GETPOST('search_balance', 'alphanohtml');
 $withBalance = GETPOSTINT('with_balance');
@@ -38,6 +45,7 @@ if ($removeFilter) {
 	$searchRef = '';
 	$searchBarcode = '';
 	$searchPortfolio = 0;
+	$searchSeries = '';
 	$searchStatus = '';
 	$searchBalance = '';
 	$withBalance = 0;
@@ -51,6 +59,7 @@ $param = '&limit='.$limit;
 if ($searchRef !== '') $param .= '&search_ref='.urlencode($searchRef);
 if ($searchBarcode !== '') $param .= '&search_barcode='.urlencode($searchBarcode);
 if ($searchPortfolio > 0) $param .= '&search_portfolio='.$searchPortfolio;
+if ($searchSeries !== '') $param .= '&search_series='.urlencode($searchSeries);
 if ($searchStatus !== '') $param .= '&search_status='.(int) $searchStatus;
 if ($searchBalance !== '') $param .= '&search_balance='.urlencode($searchBalance);
 if ($withBalance) $param .= '&with_balance=1';
@@ -60,11 +69,18 @@ if ($searchExpirationDate > 0) {
 	$param .= '&search_expiration_datemonth='.dol_print_date($searchExpirationDate, '%m');
 	$param .= '&search_expiration_dateyear='.dol_print_date($searchExpirationDate, '%Y');
 }
-$sql = 'SELECT v.rowid, v.ref, v.barcode, v.initial_amount, v.current_balance, v.status, v.date_expiration, p.rowid AS portfolio_id, p.ref AS portfolio_ref';
-$sql .= ' FROM '.$db->prefix().'dolivoucher_voucher v INNER JOIN '.$db->prefix().'dolivoucher_portfolio p ON p.rowid=v.fk_portfolio AND p.entity=v.entity WHERE v.entity='.$entity;
+$portfolioOptions = array();
+$sqlPortfolios = 'SELECT rowid, ref, label FROM '.$db->prefix().'dolivoucher_portfolio WHERE entity='.$entity.' ORDER BY ref ASC';
+$resqlPortfolios = $db->query($sqlPortfolios);
+while ($resqlPortfolios && ($portfolio = $db->fetch_object($resqlPortfolios))) {
+	$portfolioOptions[(int) $portfolio->rowid] = $portfolio->ref.((string) $portfolio->label !== '' ? ' - '.$portfolio->label : '');
+}
+$sql = 'SELECT v.rowid, v.ref, v.barcode, v.initial_amount, v.current_balance, v.status, v.date_expiration, p.rowid AS portfolio_id, p.ref AS portfolio_ref, s.rowid AS series_id, s.ref AS series_ref';
+$sql .= ' FROM '.$db->prefix().'dolivoucher_voucher v INNER JOIN '.$db->prefix().'dolivoucher_portfolio p ON p.rowid=v.fk_portfolio AND p.entity=v.entity LEFT JOIN '.$db->prefix().'dolivoucher_series s ON s.rowid=v.fk_series AND s.entity=v.entity WHERE v.entity='.$entity;
 if ($searchRef !== '') $sql .= " AND v.ref LIKE '%".$db->escape($searchRef)."%'";
 if ($searchBarcode !== '') $sql .= " AND v.barcode LIKE '%".$db->escape($searchBarcode)."%'";
 if ($searchPortfolio > 0) $sql .= ' AND v.fk_portfolio='.$searchPortfolio;
+if ($searchSeries !== '') $sql .= " AND s.ref LIKE '%".$db->escape($searchSeries)."%'";
 if ($searchStatus !== '') $sql .= ' AND v.status='.(int) $searchStatus;
 if ($searchBalance !== '') $sql .= natural_search('v.current_balance', $searchBalance, 1);
 if ($withBalance) $sql .= ' AND v.current_balance>0';
@@ -73,14 +89,15 @@ if ($searchExpirationDate > 0) {
 	$sql .= " AND v.date_expiration>='".$db->idate($searchExpirationDate)."'";
 	$sql .= " AND v.date_expiration<='".$db->idate(dol_time_plus_duree($searchExpirationDate, 1, 'd') - 1)."'";
 }
-$sql .= ' ORDER BY v.ref ASC'.$db->plimit($limit + 1, $offset);
+$sql .= ' ORDER BY '.$sortfield.' '.$sortorder.$db->plimit($limit + 1, $offset);
 $resql = $db->query($sql);
 $num = $resql ? $db->num_rows($resql) : 0;
 llxHeader('', $langs->trans('Vouchers'));
 print '<form method="POST" id="searchFormList" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
 print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="formfilteraction" id="formfilteraction" value="list">';
-print_barre_liste($langs->trans('Vouchers'), $page, $_SERVER['PHP_SELF'], $param, '', '', '', $num, '', 'ticket', 0, '', '', $limit);
+print '<input type="hidden" name="sortfield" value="'.dol_escape_htmltag($sortfield).'"><input type="hidden" name="sortorder" value="'.dol_escape_htmltag($sortorder).'">';
+print_barre_liste($langs->trans('Vouchers'), $page, $_SERVER['PHP_SELF'], $param, $sortfield, $sortorder, '', $num, '', 'ticket', 0, '', '', $limit);
 print '<div class="div-table-responsive"><table class="tagtable liste">';
 $voucherStatusOptions = array();
 foreach (dolivoucherVoucherStatuses() as $key => $label) {
@@ -89,20 +106,22 @@ foreach (dolivoucherVoucherStatuses() as $key => $label) {
 print '<tr class="liste_titre_filter">';
 if (!empty($arrayfields['v.ref']['checked'])) print '<td class="liste_titre"><input class="flat maxwidth100" name="search_ref" value="'.dol_escape_htmltag($searchRef).'"></td>';
 if (!empty($arrayfields['v.barcode']['checked'])) print '<td class="liste_titre"><input class="flat maxwidth100" name="search_barcode" value="'.dol_escape_htmltag($searchBarcode).'"></td>';
-if (!empty($arrayfields['p.ref']['checked'])) print '<td class="liste_titre"><input class="flat maxwidth75" type="number" name="search_portfolio" value="'.($searchPortfolio ?: '').'"></td>';
+if (!empty($arrayfields['p.ref']['checked'])) print '<td class="liste_titre">'.$form->selectarray('search_portfolio', $portfolioOptions, $searchPortfolio, 1, 0, 0, '', 0, 0, 0, '', 'maxwidth200').'</td>';
+if (!empty($arrayfields['s.ref']['checked'])) print '<td class="liste_titre"><input class="flat maxwidth100" name="search_series" value="'.dol_escape_htmltag($searchSeries).'"></td>';
 if (!empty($arrayfields['v.initial_amount']['checked'])) print '<td class="liste_titre"></td>';
 if (!empty($arrayfields['v.current_balance']['checked'])) print '<td class="liste_titre nowrap"><input class="flat maxwidth75" type="text" name="search_balance" value="'.dol_escape_htmltag($searchBalance).'"> <label><input type="checkbox" name="with_balance" value="1"'.($withBalance ? ' checked' : '').'> '.$langs->trans('WithBalance').'</label></td>';
 if (!empty($arrayfields['v.status']['checked'])) print '<td class="liste_titre">'.$form->selectarray('search_status', $voucherStatusOptions, $searchStatus, 1, 0, 0, '', 0, 0, 0, '', 'maxwidth150').'</td>';
 if (!empty($arrayfields['v.date_expiration']['checked'])) print '<td class="liste_titre nowrap"><label><input type="checkbox" name="expired" value="1"'.($expired ? ' checked' : '').'> '.$langs->trans('Expired').'</label> '.$form->selectDate($searchExpirationDate ?: -1, 'search_expiration_date', 0, 0, 1, '', 1, 0, 0, '', '', '', '', 1, '', $langs->trans('ExpirationDate')).'</td>';
 print '<td class="liste_titre center maxwidthsearch actioncolumn"><button type="submit" class="liste_titre button_search" name="button_search" value="x"><span class="fas fa-search"></span></button> <button type="submit" class="liste_titre button_removefilter reposition" name="button_removefilter_x" value="x"><span class="fas fa-times"></span></button></td></tr>';
 print '<tr class="liste_titre">';
-if (!empty($arrayfields['v.ref']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.ref']['label']), $_SERVER['PHP_SELF'], '', '', $param, '', '');
-if (!empty($arrayfields['v.barcode']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.barcode']['label']), $_SERVER['PHP_SELF'], '', '', $param, '', '');
-if (!empty($arrayfields['p.ref']['checked'])) print_liste_field_titre($langs->trans($arrayfields['p.ref']['label']), $_SERVER['PHP_SELF'], '', '', $param, '', '');
-if (!empty($arrayfields['v.initial_amount']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.initial_amount']['label']), $_SERVER['PHP_SELF'], '', '', $param, 'align="right"', '');
-if (!empty($arrayfields['v.current_balance']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.current_balance']['label']), $_SERVER['PHP_SELF'], '', '', $param, 'align="right"', '');
-if (!empty($arrayfields['v.status']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.status']['label']), $_SERVER['PHP_SELF'], '', '', $param, '', '');
-if (!empty($arrayfields['v.date_expiration']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.date_expiration']['label']), $_SERVER['PHP_SELF'], '', '', $param, '', '');
+if (!empty($arrayfields['v.ref']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.ref']['label']), $_SERVER['PHP_SELF'], 'v.ref', '', $param, '', $sortfield, $sortorder);
+if (!empty($arrayfields['v.barcode']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.barcode']['label']), $_SERVER['PHP_SELF'], 'v.barcode', '', $param, '', $sortfield, $sortorder);
+if (!empty($arrayfields['p.ref']['checked'])) print_liste_field_titre($langs->trans($arrayfields['p.ref']['label']), $_SERVER['PHP_SELF'], 'p.ref', '', $param, '', $sortfield, $sortorder);
+if (!empty($arrayfields['s.ref']['checked'])) print_liste_field_titre($langs->trans($arrayfields['s.ref']['label']), $_SERVER['PHP_SELF'], 's.ref', '', $param, '', $sortfield, $sortorder);
+if (!empty($arrayfields['v.initial_amount']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.initial_amount']['label']), $_SERVER['PHP_SELF'], 'v.initial_amount', '', $param, 'align="right"', $sortfield, $sortorder);
+if (!empty($arrayfields['v.current_balance']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.current_balance']['label']), $_SERVER['PHP_SELF'], 'v.current_balance', '', $param, 'align="right"', $sortfield, $sortorder);
+if (!empty($arrayfields['v.status']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.status']['label']), $_SERVER['PHP_SELF'], 'v.status', '', $param, '', $sortfield, $sortorder);
+if (!empty($arrayfields['v.date_expiration']['checked'])) print_liste_field_titre($langs->trans($arrayfields['v.date_expiration']['label']), $_SERVER['PHP_SELF'], 'v.date_expiration', '', $param, '', $sortfield, $sortorder);
 print_liste_field_titre($selectedfields, $_SERVER['PHP_SELF'], '', '', $param, '', '', '', 'maxwidthsearch center ');
 print '</tr>';
 $count = 0;
@@ -112,6 +131,7 @@ while ($resql && ($row = $db->fetch_object($resql)) && $count < $limit) {
 	if (!empty($arrayfields['v.ref']['checked'])) print '<td><a href="voucher_card.php?id='.(int) $row->rowid.'">'.dol_escape_htmltag($row->ref).'</a></td>';
 	if (!empty($arrayfields['v.barcode']['checked'])) print '<td>'.dol_escape_htmltag((string) $row->barcode).'</td>';
 	if (!empty($arrayfields['p.ref']['checked'])) print '<td><a href="portfolio_card.php?id='.(int) $row->portfolio_id.'">'.dol_escape_htmltag($row->portfolio_ref).'</a></td>';
+	if (!empty($arrayfields['s.ref']['checked'])) print '<td>'.($row->series_id ? '<a href="series_card.php?id='.(int) $row->series_id.'">'.dol_escape_htmltag($row->series_ref).'</a>' : '').'</td>';
 	if (!empty($arrayfields['v.initial_amount']['checked'])) print '<td class="right">'.price($row->initial_amount, 0, $langs, 1, -1, -1, 'XOF').'</td>';
 	if (!empty($arrayfields['v.current_balance']['checked'])) print '<td class="right">'.price($row->current_balance, 0, $langs, 1, -1, -1, 'XOF').'</td>';
 	if (!empty($arrayfields['v.status']['checked'])) print '<td>'.dolivoucherStatusLabel($row->status, true).'</td>';

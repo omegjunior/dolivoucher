@@ -1,3 +1,3 @@
--- DoliVoucher upgrade marker.
+-- DoliVoucher upgrade marker (Phase 2 adds series, material events and sequence tables).
 -- Schema creation is split into the llx_dolivoucher_*.sql files so Dolibarr's
 -- module installer can replay it using MAIN_DB_PREFIX substitution.
