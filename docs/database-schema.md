@@ -40,6 +40,14 @@ Voucher reconstruction is:
 
 `ISSUE`, block, unblock and expiration are audit events with no balance effect. The service compares each reconstruction with its materialized field and reports divergence without updating it.
 
+## `llx_dolivoucher_invoice_settlement`
+
+Append-only Phase 3A bridge between one DoliVoucher operation, one voucher, one customer invoice and one native payment. APPLY and REVERSAL are separate rows. It stores a UUID, an entity-scoped idempotency key, exact covered amount, source, user/date and invoice/payment reference snapshots so audit remains readable after an authorized reversal removes the native payment.
+
+Unique indexes enforce `(entity, settlement_uuid)`, `(entity, idempotency_key)`, one settlement per `fk_operation`, and one reversal per `reversal_of`. Entity-prefixed indexes cover invoice, payment, voucher and creation date. Foreign keys are limited to module-owned voucher, operation and self-reversal rows; native invoice/payment identifiers deliberately remain durable audit references without cascade deletion.
+
+The `DVOUCH` row in `llx_c_paiement` is an autonomous type-2 payment mode owned by the module. It creates no bank entry and is distinct from any payment code owned by another module.
+
 Exposure values are calculated, not stored:
 
 - immediately redeemable voucher balance: voucher statuses `ACTIVE` and `PARTIALLY_CONSUMED`;

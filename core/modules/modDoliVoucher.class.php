@@ -21,10 +21,10 @@ class modDoliVoucher extends DolibarrModules
 		$this->descriptionlong = 'DoliVoucherDescription';
 		$this->editor_name = 'Fred Omega Junior';
 		$this->editor_url = 'https://www.linkedin.com/in/frédéric-h-887621160';
-		$this->version = '0.2.0-dev';
+		$this->version = '0.3.0-dev';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-gavel';
-		$this->module_parts = array('triggers' => 0, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 1, 'printing' => 1, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array(), 'moduleforexternal' => 0);
+		$this->module_parts = array('triggers' => 1, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 1, 'printing' => 1, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array('invoicecard'), 'moduleforexternal' => 0);
 		$this->dirs = array('/dolivoucher/temp', '/dolivoucher/series');
 		$this->config_page_url = array('setup.php@dolivoucher');
 		$this->hidden = getDolGlobalInt('MODULE_DOLIVOUCHER_DISABLED');
@@ -69,6 +69,8 @@ class modDoliVoucher extends DolibarrModules
 			array(50111615, 'DoliVoucherPermissionSeriesReprint', 'series', 'reprint'),
 			array(50111616, 'DoliVoucherPermissionSeriesPrepare', 'series', 'prepare'),
 			array(50111617, 'DoliVoucherPermissionSeriesDeliver', 'series', 'deliver'),
+			array(50111618, 'DoliVoucherPermissionInvoiceSettlementUse', 'settlement', 'use'),
+			array(50111619, 'DoliVoucherPermissionInvoiceSettlementReverse', 'settlement', 'reverse'),
 		);
 		foreach ($permissions as $permission) {
 			$r = count($this->rights);

@@ -162,30 +162,44 @@ class DoliVoucherService
 	{
 		$this->db->begin();
 		try {
-			$amount = DoliVoucherMoney::normalize($amount, true);
-			$voucher = $this->lockVoucher($voucherId, $entity);
-			if (!in_array((int) $voucher->status, array(DoliVoucherVoucher::STATUS_ACTIVE, DoliVoucherVoucher::STATUS_PARTIALLY_CONSUMED), true)) {
-				throw new DomainException('ErrorVoucherNotConsumable');
-			}
-			if (!empty($voucher->date_expiration) && $this->db->jdate($voucher->date_expiration) < dol_now()) {
-				throw new DomainException('ErrorVoucherExpired');
-			}
-			$before = DoliVoucherMoney::normalize((string) $voucher->current_balance);
-			if (DoliVoucherMoney::compare($before, $amount) < 0) {
-				throw new DomainException('ErrorInsufficientVoucherBalance');
-			}
-			$sql = 'UPDATE '.$this->db->prefix().'dolivoucher_voucher SET status=CASE WHEN current_balance-'.$this->decimal($amount).'=0 THEN '.DoliVoucherVoucher::STATUS_CONSUMED.' ELSE '.DoliVoucherVoucher::STATUS_PARTIALLY_CONSUMED.' END';
-			$sql .= ', current_balance=current_balance-'.$this->decimal($amount);
-			$sql .= ', fk_user_modif='.(int) $user->id.' WHERE rowid='.$voucherId.' AND entity='.$entity.' AND current_balance >= '.$this->decimal($amount);
-			$this->mustQuery($sql, 'ErrorVoucherConsumptionFailed');
-			$after = (string) $this->one('SELECT current_balance FROM '.$this->db->prefix().'dolivoucher_voucher WHERE rowid='.$voucherId)->current_balance;
-			$this->appendOperation($entity, (int) $voucher->fk_portfolio, $voucherId, DoliVoucherOperation::TYPE_CONSUME, $amount, $before, $after, $user, $reason, $externalRef);
+			$this->consumeVoucherInTransaction($voucherId, $entity, $amount, $user, $reason, $externalRef);
 			$this->db->commit();
 			return 1;
 		} catch (Throwable $e) {
 			$this->db->rollback();
 			return $this->fail($e);
 		}
+	}
+
+	/**
+	 * Consume a voucher inside a transaction owned by the caller.
+	 *
+	 * @return int ID of the appended DoliVoucher operation
+	 * @throws Throwable
+	 */
+	public function consumeVoucherInTransaction(int $voucherId, int $entity, $amount, User $user, string $reason = '', string $externalRef = '', ?string $objectType = null, ?int $objectId = null): int
+	{
+		if ((int) $this->db->transaction_opened <= 0) {
+			throw new LogicException('ErrorTransactionRequired');
+		}
+		$amount = DoliVoucherMoney::normalize($amount, true);
+		$voucher = $this->lockVoucher($voucherId, $entity);
+		if (!in_array((int) $voucher->status, array(DoliVoucherVoucher::STATUS_ACTIVE, DoliVoucherVoucher::STATUS_PARTIALLY_CONSUMED), true)) {
+			throw new DomainException('ErrorVoucherNotConsumable');
+		}
+		if (!empty($voucher->date_expiration) && $this->db->jdate($voucher->date_expiration) < dol_now()) {
+			throw new DomainException('ErrorVoucherExpired');
+		}
+		$before = DoliVoucherMoney::normalize((string) $voucher->current_balance);
+		if (DoliVoucherMoney::compare($before, $amount) < 0) {
+			throw new DomainException('ErrorInsufficientVoucherBalance');
+		}
+		$sql = 'UPDATE '.$this->db->prefix().'dolivoucher_voucher SET status=CASE WHEN current_balance-'.$this->decimal($amount).'=0 THEN '.DoliVoucherVoucher::STATUS_CONSUMED.' ELSE '.DoliVoucherVoucher::STATUS_PARTIALLY_CONSUMED.' END';
+		$sql .= ', current_balance=current_balance-'.$this->decimal($amount);
+		$sql .= ', fk_user_modif='.(int) $user->id.' WHERE rowid='.$voucherId.' AND entity='.$entity.' AND current_balance >= '.$this->decimal($amount);
+		$this->mustQuery($sql, 'ErrorVoucherConsumptionFailed');
+		$after = (string) $this->one('SELECT current_balance FROM '.$this->db->prefix().'dolivoucher_voucher WHERE rowid='.$voucherId.' AND entity='.$entity)->current_balance;
+		return $this->appendOperation($entity, (int) $voucher->fk_portfolio, $voucherId, DoliVoucherOperation::TYPE_CONSUME, $amount, $before, $after, $user, $reason, $externalRef, null, null, null, null, $objectType, $objectId);
 	}
 
 	public function blockVoucher(int $voucherId, int $entity, User $user, string $reason): int
@@ -295,35 +309,47 @@ class DoliVoucherService
 	{
 		$this->db->begin();
 		try {
-			$hint = $this->one('SELECT fk_voucher FROM '.$this->db->prefix().'dolivoucher_operation WHERE rowid='.$operationId.' AND entity='.$entity.' LIMIT 1');
-			if ((int) $hint->fk_voucher <= 0) {
-				throw new DomainException('ErrorOperationNotCompensable');
+			$linked = $this->one('SELECT COUNT(*) AS linked_count FROM '.$this->db->prefix().'dolivoucher_invoice_settlement WHERE entity='.$entity.' AND fk_operation='.$operationId." AND event_type='APPLY'");
+			if ((int) $linked->linked_count > 0) {
+				throw new DomainException('ErrorInvoiceConsumptionRequiresSettlementReversal');
 			}
-			$voucher = $this->lockVoucher((int) $hint->fk_voucher, $entity);
-			$operation = $this->one('SELECT * FROM '.$this->db->prefix().'dolivoucher_operation WHERE rowid='.$operationId.' AND entity='.$entity.' FOR UPDATE');
-			if ($operation->operation_type !== DoliVoucherOperation::TYPE_CONSUME) {
-				throw new DomainException('ErrorOperationNotCompensable');
-			}
-			$existing = $this->one('SELECT COUNT(*) AS reversal_count FROM '.$this->db->prefix().'dolivoucher_operation WHERE reversal_of='.$operationId);
-			if ((int) $existing->reversal_count > 0) {
-				throw new DomainException('ErrorOperationAlreadyCompensated');
-			}
-			$amount = DoliVoucherMoney::normalize((string) $operation->amount, true);
-			$before = DoliVoucherMoney::normalize((string) $voucher->current_balance);
-			$sql = 'SELECT CAST('.$this->decimal($before).'+'.$this->decimal($amount).' AS DECIMAL(24,8)) AS candidate';
-			$after = (string) $this->one($sql)->candidate;
-			if (DoliVoucherMoney::compare($after, (string) $voucher->initial_amount) > 0 || in_array((int) $voucher->status, array(DoliVoucherVoucher::STATUS_CANCELED, DoliVoucherVoucher::STATUS_EXPIRED), true)) {
-				throw new DomainException('ErrorCompensationWouldInvalidateVoucher');
-			}
-			$status = (int) $voucher->status === DoliVoucherVoucher::STATUS_BLOCKED ? DoliVoucherVoucher::STATUS_BLOCKED : (DoliVoucherMoney::compare($after, (string) $voucher->initial_amount) === 0 ? DoliVoucherVoucher::STATUS_ACTIVE : DoliVoucherVoucher::STATUS_PARTIALLY_CONSUMED);
-			$this->mustQuery('UPDATE '.$this->db->prefix().'dolivoucher_voucher SET current_balance='.$this->decimal($after).', status='.$status.', fk_user_modif='.(int) $user->id.' WHERE rowid='.(int) $voucher->rowid.' AND entity='.$entity, 'ErrorCompensationFailed');
-			$this->appendOperation($entity, (int) $voucher->fk_portfolio, (int) $voucher->rowid, DoliVoucherOperation::TYPE_CORRECTION, $amount, $before, $after, $user, $reason, '', null, null, $operationId);
+			$this->compensateConsumptionInTransaction($operationId, $entity, $user, $reason);
 			$this->db->commit();
 			return 1;
 		} catch (Throwable $e) {
 			$this->db->rollback();
 			return $this->fail($e);
 		}
+	}
+
+	/** Compensate one consumption inside a transaction owned by the caller. */
+	public function compensateConsumptionInTransaction(int $operationId, int $entity, User $user, string $reason, ?string $objectType = null, ?int $objectId = null): int
+	{
+		if ((int) $this->db->transaction_opened <= 0) {
+			throw new LogicException('ErrorTransactionRequired');
+		}
+		$hint = $this->one('SELECT fk_voucher FROM '.$this->db->prefix().'dolivoucher_operation WHERE rowid='.$operationId.' AND entity='.$entity.' LIMIT 1');
+		if ((int) $hint->fk_voucher <= 0) {
+			throw new DomainException('ErrorOperationNotCompensable');
+		}
+		$voucher = $this->lockVoucher((int) $hint->fk_voucher, $entity);
+		$operation = $this->one('SELECT * FROM '.$this->db->prefix().'dolivoucher_operation WHERE rowid='.$operationId.' AND entity='.$entity.' FOR UPDATE');
+		if ($operation->operation_type !== DoliVoucherOperation::TYPE_CONSUME) {
+			throw new DomainException('ErrorOperationNotCompensable');
+		}
+		$existing = $this->one('SELECT COUNT(*) AS reversal_count FROM '.$this->db->prefix().'dolivoucher_operation WHERE reversal_of='.$operationId);
+		if ((int) $existing->reversal_count > 0) {
+			throw new DomainException('ErrorOperationAlreadyCompensated');
+		}
+		$amount = DoliVoucherMoney::normalize((string) $operation->amount, true);
+		$before = DoliVoucherMoney::normalize((string) $voucher->current_balance);
+		$after = (string) $this->one('SELECT CAST('.$this->decimal($before).'+'.$this->decimal($amount).' AS DECIMAL(24,8)) AS candidate')->candidate;
+		if (DoliVoucherMoney::compare($after, (string) $voucher->initial_amount) > 0 || in_array((int) $voucher->status, array(DoliVoucherVoucher::STATUS_CANCELED, DoliVoucherVoucher::STATUS_EXPIRED), true)) {
+			throw new DomainException('ErrorCompensationWouldInvalidateVoucher');
+		}
+		$status = (int) $voucher->status === DoliVoucherVoucher::STATUS_BLOCKED ? DoliVoucherVoucher::STATUS_BLOCKED : (DoliVoucherMoney::compare($after, (string) $voucher->initial_amount) === 0 ? DoliVoucherVoucher::STATUS_ACTIVE : DoliVoucherVoucher::STATUS_PARTIALLY_CONSUMED);
+		$this->mustQuery('UPDATE '.$this->db->prefix().'dolivoucher_voucher SET current_balance='.$this->decimal($after).', status='.$status.', fk_user_modif='.(int) $user->id.' WHERE rowid='.(int) $voucher->rowid.' AND entity='.$entity, 'ErrorCompensationFailed');
+		return $this->appendOperation($entity, (int) $voucher->fk_portfolio, (int) $voucher->rowid, DoliVoucherOperation::TYPE_CORRECTION, $amount, $before, $after, $user, $reason, '', null, null, $operationId, null, $objectType, $objectId);
 	}
 
 	/** @return array{materialized:string,reconstructed:string,consistent:bool} */
@@ -449,14 +475,14 @@ class DoliVoucherService
 		}
 	}
 
-	private function appendOperation(int $entity, int $portfolioId, ?int $voucherId, string $type, string $amount, ?string $before, ?string $after, User $user, string $reason = '', string $externalRef = '', ?int $sourceId = null, ?int $destinationId = null, ?int $reversalOf = null, ?string $uuid = null): int
+	private function appendOperation(int $entity, int $portfolioId, ?int $voucherId, string $type, string $amount, ?string $before, ?string $after, User $user, string $reason = '', string $externalRef = '', ?int $sourceId = null, ?int $destinationId = null, ?int $reversalOf = null, ?string $uuid = null, ?string $objectType = null, ?int $objectId = null): int
 	{
 		$amount = DoliVoucherMoney::normalize($amount, true);
-		$sql = 'INSERT INTO '.$this->db->prefix().'dolivoucher_operation (entity, operation_uuid, fk_portfolio, fk_voucher, operation_type, amount, balance_before, balance_after, source_portfolio_id, destination_portfolio_id, external_ref, reason, date_operation, date_creation, fk_user_creat, reversal_of) VALUES (';
+		$sql = 'INSERT INTO '.$this->db->prefix().'dolivoucher_operation (entity, operation_uuid, fk_portfolio, fk_voucher, operation_type, amount, balance_before, balance_after, source_portfolio_id, destination_portfolio_id, object_type, fk_object, external_ref, reason, date_operation, date_creation, fk_user_creat, reversal_of) VALUES (';
 		$sql .= $entity.", '".$this->db->escape($uuid ?? self::uuid())."', ".$portfolioId.', '.($voucherId === null ? 'NULL' : $voucherId).", '".$this->db->escape($type)."', ".$this->decimal($amount).', ';
 		$sql .= $before === null ? 'NULL, ' : $this->decimal($before).', ';
 		$sql .= $after === null ? 'NULL, ' : $this->decimal($after).', ';
-		$sql .= ($sourceId === null ? 'NULL' : $sourceId).', '.($destinationId === null ? 'NULL' : $destinationId).", '".$this->db->escape($externalRef)."', '".$this->db->escape($reason)."', '".$this->db->idate(dol_now())."', '".$this->db->idate(dol_now())."', ".(int) $user->id.', '.($reversalOf === null ? 'NULL' : $reversalOf).')';
+		$sql .= ($sourceId === null ? 'NULL' : $sourceId).', '.($destinationId === null ? 'NULL' : $destinationId).', '.($objectType === null ? 'NULL' : "'".$this->db->escape($objectType)."'").', '.($objectId === null ? 'NULL' : $objectId).", '".$this->db->escape($externalRef)."', '".$this->db->escape($reason)."', '".$this->db->idate(dol_now())."', '".$this->db->idate(dol_now())."', ".(int) $user->id.', '.($reversalOf === null ? 'NULL' : $reversalOf).')';
 		$this->mustQuery($sql, 'ErrorJournalAppendFailed');
 		return (int) $this->db->last_insert_id($this->db->prefix().'dolivoucher_operation');
 	}

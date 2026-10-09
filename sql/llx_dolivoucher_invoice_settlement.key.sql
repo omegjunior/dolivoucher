@@ -1,0 +1,11 @@
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD UNIQUE INDEX uk_dolivoucher_settlement_uuid (entity, settlement_uuid);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD UNIQUE INDEX uk_dolivoucher_settlement_idempotency (entity, idempotency_key);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD UNIQUE INDEX uk_dolivoucher_settlement_operation (fk_operation);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD UNIQUE INDEX uk_dolivoucher_settlement_reversal (reversal_of);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD INDEX idx_dolivoucher_settlement_invoice (entity, fk_facture);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD INDEX idx_dolivoucher_settlement_payment (entity, fk_paiement);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD INDEX idx_dolivoucher_settlement_voucher (entity, fk_voucher);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD INDEX idx_dolivoucher_settlement_date (entity, date_creation);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD CONSTRAINT fk_dolivoucher_settlement_voucher FOREIGN KEY (fk_voucher) REFERENCES llx_dolivoucher_voucher(rowid);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD CONSTRAINT fk_dolivoucher_settlement_operation FOREIGN KEY (fk_operation) REFERENCES llx_dolivoucher_operation(rowid);
+ALTER TABLE llx_dolivoucher_invoice_settlement ADD CONSTRAINT fk_dolivoucher_settlement_reversal FOREIGN KEY (reversal_of) REFERENCES llx_dolivoucher_invoice_settlement(rowid);

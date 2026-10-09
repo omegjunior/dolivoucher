@@ -16,6 +16,7 @@ require_once dirname(__DIR__).'/class/dolivoucheroperation.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherservice.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherseriesservice.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherseriesevent.class.php';
+require_once dirname(__DIR__).'/class/dolivoucherinvoicesettlement.class.php';
 
 /** @throws RuntimeException */
 function dvExpect(bool $condition, string $message): void
@@ -72,7 +73,7 @@ try {
 	dvExpect((bool) $db->query('CREATE DATABASE `'.$testDatabase.'` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'), 'Cannot create isolated database');
 	$created = true;
 	dvExpect((bool) $db->query('USE `'.$testDatabase.'`'), 'Cannot select isolated database');
-	foreach (array('llx_dolivoucher_portfolio.sql', 'llx_dolivoucher_sequence.sql', 'llx_dolivoucher_series.sql', 'llx_dolivoucher_voucher.sql', 'llx_dolivoucher_voucher_phase2.sql', 'llx_dolivoucher_operation.sql', 'llx_dolivoucher_series_event.sql', 'llx_dolivoucher_series_event_voucher.sql', 'llx_dolivoucher_portfolio.key.sql', 'llx_dolivoucher_sequence.key.sql', 'llx_dolivoucher_series.key.sql', 'llx_dolivoucher_voucher.key.sql', 'llx_dolivoucher_operation.key.sql', 'llx_dolivoucher_series_event.key.sql', 'llx_dolivoucher_series_event_voucher.key.sql') as $file) {
+	foreach (array('llx_dolivoucher_portfolio.sql', 'llx_dolivoucher_sequence.sql', 'llx_dolivoucher_series.sql', 'llx_dolivoucher_voucher.sql', 'llx_dolivoucher_voucher_phase2.sql', 'llx_dolivoucher_operation.sql', 'llx_dolivoucher_series_event.sql', 'llx_dolivoucher_series_event_voucher.sql', 'llx_dolivoucher_invoice_settlement.sql', 'llx_dolivoucher_portfolio.key.sql', 'llx_dolivoucher_sequence.key.sql', 'llx_dolivoucher_series.key.sql', 'llx_dolivoucher_voucher.key.sql', 'llx_dolivoucher_operation.key.sql', 'llx_dolivoucher_series_event.key.sql', 'llx_dolivoucher_series_event_voucher.key.sql', 'llx_dolivoucher_invoice_settlement.key.sql') as $file) {
 		$sql = (string) file_get_contents(dirname(__DIR__).'/sql/'.$file);
 		foreach (array_filter(array_map('trim', explode(';', $sql))) as $statement) dvExpect((bool) $db->query($statement), $file.': '.$db->lasterror());
 	}
@@ -181,6 +182,48 @@ try {
 	dvExpect($portfolioCheck['consistent'] && $voucherCheck['consistent'], 'Journal reconciliation failed'); $assertions++;
 	$operation = new DoliVoucherOperation($db);
 	dvExpect($operation->update($user) < 0 && $operation->delete($user) < 0 && $operation->setValueFrom('amount', '1') < 0, 'Append-only API exposed mutation'); $assertions++;
+
+	$invoiceVoucher = dvVoucher($db, $service, $user, $source, 'V-INVOICE-PRIMITIVE', '100');
+	dvExpect($invoiceVoucher > 0 && $service->activateVoucher($invoiceVoucher, 1, $user) > 0, 'Invoice primitive voucher setup failed'); $assertions++;
+	$db->begin();
+	try {
+		$invoiceOperation = $service->consumeVoucherInTransaction($invoiceVoucher, 1, '40', $user, 'invoice primitive', '', 'facture', 123);
+		$settlementUuid = DoliVoucherService::uuid();
+		$idempotencyKey = DoliVoucherService::uuid();
+		$insertApply = "INSERT INTO llx_dolivoucher_invoice_settlement (entity,settlement_uuid,idempotency_key,event_type,fk_voucher,fk_operation,fk_facture,fk_paiement,amount,reversal_of,invoice_ref_snapshot,payment_ref_snapshot,request_source,date_creation,fk_user_creat) VALUES (1,'".$db->escape($settlementUuid)."','".$db->escape($idempotencyKey)."','APPLY',".$invoiceVoucher.",".$invoiceOperation.",123,456,40,NULL,'SMOKE-INV','SMOKE-PAY','INVOICE_CARD','".$db->idate(dol_now())."',".(int) $user->id.")";
+		dvExpect((bool) $db->query($insertApply), 'Cannot append APPLY settlement');
+		$db->commit();
+	} catch (Throwable $e) {
+		$db->rollback();
+		throw $e;
+	}
+	$invoiceOperationRow = dvOne($db, 'SELECT object_type,fk_object FROM llx_dolivoucher_operation WHERE rowid='.$invoiceOperation);
+	dvExpect($invoiceOperationRow->object_type === 'facture' && (int) $invoiceOperationRow->fk_object === 123, 'Invoice operation native-object metadata missing'); $assertions++;
+	dvExpect((string) dvOne($db, 'SELECT current_balance AS amount FROM llx_dolivoucher_voucher WHERE rowid='.$invoiceVoucher)->amount === '60.00000000', 'Transactional primitive did not debit voucher'); $assertions++;
+	dvExpect($service->compensateConsumption($invoiceOperation, 1, $user, 'generic path must fail') < 0, 'Generic compensation accepted an invoice settlement'); $assertions++;
+	dvExpect(!(bool) $db->query($insertApply), 'Duplicate settlement idempotency key was accepted'); $assertions++;
+	$db->begin();
+	try {
+		$reversalOperation = $service->compensateConsumptionInTransaction($invoiceOperation, 1, $user, 'controlled reversal', 'facture', 123);
+		$insertReversal = "INSERT INTO llx_dolivoucher_invoice_settlement (entity,settlement_uuid,idempotency_key,event_type,fk_voucher,fk_operation,fk_facture,fk_paiement,amount,reversal_of,invoice_ref_snapshot,payment_ref_snapshot,request_source,date_creation,fk_user_creat) VALUES (1,'".$db->escape(DoliVoucherService::uuid())."','".$db->escape(DoliVoucherService::uuid())."','REVERSAL',".$invoiceVoucher.",".$reversalOperation.",123,456,40,".(int) dvOne($db, "SELECT rowid FROM llx_dolivoucher_invoice_settlement WHERE settlement_uuid='".$db->escape($settlementUuid)."'")->rowid.",'SMOKE-INV','SMOKE-PAY','INVOICE_CARD','".$db->idate(dol_now())."',".(int) $user->id.")";
+		dvExpect((bool) $db->query($insertReversal), 'Cannot append REVERSAL settlement');
+		$db->commit();
+	} catch (Throwable $e) {
+		$db->rollback();
+		throw $e;
+	}
+	dvExpect((string) dvOne($db, 'SELECT current_balance AS amount FROM llx_dolivoucher_voucher WHERE rowid='.$invoiceVoucher)->amount === '100.00000000', 'Controlled reversal did not restore exact voucher balance'); $assertions++;
+	$db->begin();
+	$doubleReversalRefused = false;
+	try {
+		$service->compensateConsumptionInTransaction($invoiceOperation, 1, $user, 'duplicate controlled reversal', 'facture', 123);
+	} catch (Throwable $e) {
+		$doubleReversalRefused = true;
+	}
+	$db->rollback();
+	dvExpect($doubleReversalRefused, 'Double controlled compensation was accepted'); $assertions++;
+	$settlementObject = new DoliVoucherInvoiceSettlement($db);
+	dvExpect($settlementObject->create($user) < 0 && $settlementObject->update($user) < 0 && $settlementObject->delete($user) < 0 && $settlementObject->setValueFrom('amount', '1') < 0, 'Settlement append-only API exposed mutation'); $assertions++;
 
 	$seriesService = new DoliVoucherSeriesService($db);
 	$seriesBalanceBefore = (string) dvOne($db, 'SELECT available_unallocated_balance AS amount FROM llx_dolivoucher_portfolio WHERE rowid='.$source)->amount;
