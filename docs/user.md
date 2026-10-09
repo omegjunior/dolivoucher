@@ -38,3 +38,11 @@ Printing can cover the whole series, a continuous local-number range, or an expl
 After full print coverage, authorized users may record full physical preparation and then full delivery or availability. These material actions do not activate vouchers, move balances, consume value or change the portfolio. Partial preparation/delivery is deliberately not offered in this phase.
 
 Every material event is immutable and visible on the series card. PDF events show their revision and downloadable document; each stored file is tied to its SHA-256 audit fingerprint.
+
+## Paying a customer invoice with a voucher
+
+On an eligible validated standard customer invoice in XOF, use **Use a voucher**, then enter or scan the exact serial number or Code 128 barcode. The barcode identifies the voucher but does not replace user permission or confirmation. The proposed amount is the lower of the voucher balance and invoice remainder; an authorized user may enter a smaller positive amount.
+
+One voucher may be used on several invoices while it has a usable balance, and an invoice may receive several vouchers or other native payments. Each confirmed use appears as a native Dolibarr payment and in the immutable DoliVoucher histories on both the invoice and voucher. Draft, prepared, blocked, consumed, canceled or expired vouchers are refused, as are non-XOF, deposit and situation invoices.
+
+Do not delete the native payment directly. An authorized user must use **Reverse settlement** with a mandatory reason. The controlled action removes an eligible unbanked/unreconciled/unexported payment, restores the voucher through a compensating journal operation and retains the APPLY/REVERSAL audit chain. The same settlement cannot be reversed twice.

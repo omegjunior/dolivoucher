@@ -39,7 +39,7 @@ if ($action === 'add') {
 		header('Location: '.$_SERVER['PHP_SELF'].'?id='.$result);
 		exit;
 	}
-	setEventMessages($langs->trans($object->error ?: 'ErrorVoucherCreationFailed'), null, 'errors');
+	// DoliVoucherService already publishes the precise transactional error once.
 	$action = 'create';
 } elseif ($id > 0 && $action === 'update') {
 	if (!$user->hasRight('dolivoucher', 'voucher', 'write') || $object->fetch($id) <= 0 || !in_array((int) $object->status, array(0,1), true)) accessforbidden();
@@ -141,7 +141,7 @@ print '</table></div>';
 
 $portfolioState = $db->fetch_object($db->query('SELECT status, available_unallocated_balance FROM '.$db->prefix().'dolivoucher_portfolio WHERE rowid='.(int) $object->fk_portfolio.' AND entity='.$entity.' LIMIT 1'));
 $hasConsumption = (int) $db->fetch_object($db->query("SELECT COUNT(*) AS count_value FROM ".$db->prefix()."dolivoucher_operation WHERE fk_voucher=".(int) $object->id." AND entity=".$entity." AND operation_type='CONSUME'"))->count_value > 0;
-$compensable = $db->fetch_object($db->query("SELECT o.rowid FROM ".$db->prefix()."dolivoucher_operation o LEFT JOIN ".$db->prefix()."dolivoucher_operation r ON r.reversal_of=o.rowid WHERE o.fk_voucher=".(int) $object->id." AND o.entity=".$entity." AND o.operation_type='CONSUME' AND r.rowid IS NULL ORDER BY o.rowid DESC".$db->plimit(1, 0)));
+$compensable = $db->fetch_object($db->query("SELECT o.rowid FROM ".$db->prefix()."dolivoucher_operation o LEFT JOIN ".$db->prefix()."dolivoucher_operation r ON r.reversal_of=o.rowid LEFT JOIN ".$db->prefix()."dolivoucher_invoice_settlement s ON s.fk_operation=o.rowid AND s.event_type='APPLY' WHERE o.fk_voucher=".(int) $object->id." AND o.entity=".$entity." AND o.operation_type='CONSUME' AND r.rowid IS NULL AND s.rowid IS NULL ORDER BY o.rowid DESC".$db->plimit(1, 0)));
 $notExpired = empty($object->date_expiration) || (int) $object->date_expiration > dol_now();
 $canActivate = $portfolioState && in_array((int) $portfolioState->status, array(1,2), true) && $notExpired && DoliVoucherMoney::compare((string) $portfolioState->available_unallocated_balance, (string) $object->initial_amount) >= 0;
 
@@ -190,6 +190,21 @@ if ($user->hasRight('dolivoucher', 'voucher', 'block') && in_array((int) $object
 if ($user->hasRight('dolivoucher', 'audit', 'compensate') && $compensable && !in_array((int) $object->status, array(9,10), true)) {
 	print '<form method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="id" value="'.(int) $object->id.'"><input type="hidden" name="action" value="ask_compensate"><table class="border centpercent"><tr><td class="titlefield">'.$langs->trans('AdministrativeCompensation').'</td><td><input type="number" name="operation_id" value="'.(int) $compensable->rowid.'" readonly> <input class="minwidth300" name="reason" required placeholder="'.$langs->trans('Reason').'"></td><td class="right nowraponall"><div class="inline-block divButAction"><a class="butAction" href="#" onclick="this.closest(\'form\').requestSubmit(); return false;">'.$langs->trans('ConfirmCompensation').'</a></div></td></tr></table></form>';
 }
+print '<br>'.load_fiche_titre($langs->trans('DoliVoucherSettlements'), '', 'payment');
+$settlementSql = 'SELECT s.*, o.operation_uuid, r.rowid AS reversal_id FROM '.$db->prefix().'dolivoucher_invoice_settlement s INNER JOIN '.$db->prefix().'dolivoucher_operation o ON o.rowid=s.fk_operation AND o.entity=s.entity LEFT JOIN '.$db->prefix().'dolivoucher_invoice_settlement r ON r.reversal_of=s.rowid WHERE s.entity='.$entity.' AND s.fk_voucher='.(int) $object->id.' ORDER BY s.date_creation DESC, s.rowid DESC';
+$settlementResult = $db->query($settlementSql);
+print '<div class="div-table-responsive"><table class="tagtable liste centpercent"><tr class="liste_titre"><th>'.$langs->trans('Date').'</th><th>'.$langs->trans('Event').'</th><th>'.$langs->trans('Operation').'</th><th>'.$langs->trans('Invoice').'</th><th>'.$langs->trans('Payment').'</th><th class="right">'.$langs->trans('Amount').'</th></tr>';
+$settlementFound = false;
+while ($settlementResult && ($settlement = $db->fetch_object($settlementResult))) {
+	$settlementFound = true;
+	$invoiceLink = '<a href="'.DOL_URL_ROOT.'/compta/facture/card.php?facid='.(int) $settlement->fk_facture.'">'.dol_escape_htmltag($settlement->invoice_ref_snapshot).'</a>';
+	$paymentDisplay = empty($settlement->payment_ref_snapshot) ? '#' . (int) $settlement->fk_paiement : dol_escape_htmltag($settlement->payment_ref_snapshot);
+	$paymentLink = $settlement->event_type === 'REVERSAL' || !empty($settlement->reversal_id) ? $paymentDisplay : '<a href="'.DOL_URL_ROOT.'/compta/paiement/card.php?id='.(int) $settlement->fk_paiement.'">'.$paymentDisplay.'</a>';
+	$operationLink = '<a title="'.dol_escape_htmltag($settlement->settlement_uuid).'" href="operation_list.php?search_uuid='.urlencode($settlement->operation_uuid).'">'.dol_escape_htmltag($settlement->operation_uuid).'</a>';
+	print '<tr class="oddeven"><td>'.dol_print_date($db->jdate($settlement->date_creation), 'dayhour').'</td><td>'.$langs->trans('Settlement'.$settlement->event_type).'</td><td>'.$operationLink.'</td><td>'.$invoiceLink.'</td><td>'.$paymentLink.'</td><td class="right">'.price($settlement->amount, 0, $langs, 1, -1, -1, $conf->currency).'</td></tr>';
+}
+if (!$settlementFound) print '<tr class="oddeven"><td colspan="6" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+print '</table></div>';
 print '<br>'.load_fiche_titre($langs->trans('OperationJournal'), '', 'list');
 dolivoucherPrintOperations($db, $entity, 0, (int) $object->id);
 llxFooter();

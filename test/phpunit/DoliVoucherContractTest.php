@@ -37,6 +37,14 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString('uk_dolivoucher_voucher_barcode_entity (entity, barcode)', $this->read('sql/llx_dolivoucher_voucher.key.sql'));
 	}
 
+	public function testVoucherCreationReportsDuplicateIdentifierPrecisely(): void
+	{
+		self::assertStringContainsString('identifiersAreAvailable()', $this->voucher);
+		self::assertStringContainsString('ErrorVoucherSerialAlreadyExists', $this->voucher);
+		self::assertStringContainsString('ErrorVoucherBarcodeAlreadyExists', $this->voucher);
+		self::assertSame(1, substr_count($this->read('voucher_card.php'), 'DoliVoucherService already publishes the precise transactional error once.'));
+	}
+
 	public function testActivationReservesPortfolioAndInitializesVoucher(): void
 	{
 		self::assertStringContainsString('available_unallocated_balance=available_unallocated_balance-', $this->service);
@@ -331,6 +339,45 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("(bool) \$user->hasRight('dolivoucher', 'series', 'reprint')", $card);
 		self::assertStringContainsString('->formconfirm(', $card);
 		foreach (array('series", "read', 'series", "generate', "'series', 'print'", "'series', 'reprint'", "'series', 'prepare'", "'series', 'deliver'") as $right) self::assertStringContainsString($right, $descriptor.$card);
+	}
+
+	public function testInvoiceSettlementHybridArchitectureContracts(): void
+	{
+		$service = $this->read('class/dolivoucherinvoicesettlementservice.class.php');
+		$link = $this->read('class/dolivoucherinvoicesettlement.class.php');
+		$schema = $this->read('sql/llx_dolivoucher_invoice_settlement.sql').$this->read('sql/llx_dolivoucher_invoice_settlement.key.sql');
+		$descriptor = $this->read('core/modules/modDoliVoucher.class.php');
+		$trigger = $this->read('core/triggers/interface_99_modDoliVoucher_DoliVoucherTriggers.class.php');
+		$page = $this->read('invoice_voucher.php');
+
+		self::assertStringContainsString("public const PAYMENT_CODE = 'DVOUCH'", $service);
+		self::assertStringContainsString('new Paiement($this->db)', $service);
+		self::assertStringContainsString('consumeVoucherInTransaction(', $service);
+		self::assertStringContainsString('compensateConsumptionInTransaction(', $service);
+		self::assertStringContainsString('getRemainToPay()', $service);
+		self::assertStringContainsString('FOR UPDATE', $service);
+		self::assertStringContainsString('idempotency_key', $service);
+		self::assertStringContainsString('$payment->fk_account = 0;', $service);
+		self::assertStringNotContainsString('addPaymentToBank', $service);
+		self::assertStringContainsString('assertPaymentHasNoBankLine', $service);
+		self::assertStringContainsString("EVENT_APPLY = 'APPLY'", $link);
+		self::assertStringContainsString("EVENT_REVERSAL = 'REVERSAL'", $link);
+		self::assertStringContainsString('ErrorAppendOnlySettlement', $link);
+		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_settlement_idempotency (entity, idempotency_key)', $schema);
+		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_settlement_operation (fk_operation)', $schema);
+		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_settlement_reversal (reversal_of)', $schema);
+		self::assertStringContainsString("'hooks' => array('invoicecard')", $descriptor);
+		self::assertStringContainsString("'settlement', 'use'", $descriptor);
+		self::assertStringContainsString("'settlement', 'reverse'", $descriptor);
+		self::assertStringContainsString("PAYMENT_CUSTOMER_DELETE", $trigger);
+		self::assertStringContainsString('isPaymentDeletionAuthorized()', $trigger);
+		self::assertStringContainsString('formconfirm(', $page);
+		self::assertStringContainsString("GETPOST('idempotency_key', 'alphanohtml')", $page);
+		self::assertStringContainsString('$conf->entity', $page);
+		self::assertStringContainsString("hasRight('dolivoucher', 'settlement', 'use')", $page);
+		self::assertStringContainsString("hasRight('dolivoucher', 'settlement', 'reverse')", $page);
+		self::assertStringContainsString("\$this->resprints = \$output", $this->read('class/actions_dolivoucher.class.php'));
+		self::assertStringContainsString("\$parameters['colspan']", $this->read('class/actions_dolivoucher.class.php'));
 	}
 
 	private function read(string $relative): string

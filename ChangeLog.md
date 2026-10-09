@@ -1,5 +1,13 @@
 # DoliVoucher changelog
 
+## 0.3.0-dev
+
+- Add atomic voucher settlement of eligible customer invoices through native Dolibarr payments.
+- Add the autonomous `DVOUCH` payment mode without a bank entry.
+- Add an append-only invoice settlement link, request idempotence and multi-entity controls.
+- Add invoice-card integration, reciprocal audit links and controlled reversal.
+- Block direct deletion of native payments while an active DoliVoucher settlement exists.
+
 ## 0.2.0-dev
 
 - Add entity/year-safe series numbering and atomic draft voucher generation.

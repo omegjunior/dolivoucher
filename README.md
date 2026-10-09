@@ -22,7 +22,7 @@ Place this directory at `htdocs/custom/dolivoucher`, then:
 
 1. Log into Dolibarr as a super-administrator.
 2. Go to **Setup > Modules**.
-3. Enable DoliVoucher and allocate its seventeen permissions, including the restrictive reprint and delivery rights.
+3. Enable DoliVoucher and allocate its nineteen permissions, including the restrictive invoice-use, settlement-reversal, reprint and delivery rights.
 
 The provisional module ID is `501116` and must be reserved or replaced before public distribution.
 
@@ -36,6 +36,12 @@ The A4 portrait PDF contains four approximately A6 vouchers per page and native 
 
 The administrator can configure `DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES` and `DOLIVOUCHER_MAX_VOUCHERS_PER_PDF` (defaults: 1000; technical local-counter ceiling: 999999).
 
+## Customer invoice settlement
+
+Phase 3A applies an active voucher to a validated standard customer invoice in XOF. One operation atomically creates an append-only DoliVoucher consumption, a native Dolibarr customer payment using the autonomous `DVOUCH` payment mode, and an immutable link between voucher, operation, invoice and payment. The native payment controls the invoice remainder; the DoliVoucher journal controls the voucher balance. No bank line is created.
+
+Partial use, several vouchers on one invoice, reuse of a remaining voucher balance on another invoice and combination with other payment methods are supported. Multicurrency, deposit and situation invoices are excluded. A controlled reversal deletes only the linked unbanked/unreconciled/unexported native payment, restores the voucher by compensation and appends a reversal link. Direct deletion of an active linked payment is blocked.
+
 ## Boundaries
 
-No product, stock movement, invoice payment, discount, TakePOS integration, accounting entry, VAT decision or SYSCOHADA mapping is created. Material preparation or delivery is not financial activation or consumption.
+No product, stock movement, discount, TakePOS integration, bank movement, accounting entry, VAT decision or SYSCOHADA mapping is created. Phase 3A creates a native invoice payment but deliberately leaves accounting mapping to a later validated phase. Material preparation or delivery is not financial activation or consumption.

@@ -9,6 +9,8 @@
 - `DoliVoucherSeries` represents the immutable administrative batch; its writes are reserved to `DoliVoucherSeriesService`.
 - `DoliVoucherSeriesEvent` is the read-only view of the separate append-only material journal.
 - `DoliVoucherSeriesService` owns yearly counter allocation, atomic batch insertion, PDF/event consistency and material coverage.
+- `DoliVoucherInvoiceSettlement` is the read-only append-only bridge event between a voucher operation and native invoice/payment objects.
+- `DoliVoucherInvoiceSettlementService` is the only Phase 3A writer. It orchestrates a native `Paiement`, the existing consumption primitives and the bridge table inside one outer DoliDB transaction.
 
 All record access is scoped to `$conf->entity`. Mutation pages check a dedicated right and a Dolibarr CSRF token. SQL identifiers are fixed; identifiers are cast and text is escaped through `DoliDB`.
 
@@ -20,9 +22,19 @@ Activation and cancellation resolve the voucher's portfolio, then lock the portf
 
 Reporting separates operational availability from financial exposure. Statuses active and partially consumed feed `immediately_redeemable_voucher_balance`; those statuses plus blocked feed `outstanding_voucher_balance`. `global_outstanding_balance` adds the latter to `available_unallocated_balance`. Expired balances are excluded from current outstanding exposure and reported as `expired_unreallocated_balance`. `checkPortfolioExposureBalances()` reconstructs each aggregate from the journal and reports, but never repairs, divergence.
 
+## Invoice settlement transaction
+
+The hybrid architecture has two explicit truths: `llx_dolivoucher_operation` is authoritative for voucher value and `llx_paiement` plus `llx_paiement_facture` are authoritative for the invoice remainder. `llx_dolivoucher_invoice_settlement` is immutable evidence tying both domains together.
+
+Application locks are acquired in this order: idempotency key range, invoice row, invoice payment allocations, voucher row. A request then rechecks entity, invoice eligibility, remainder, voucher status/expiration/balance and caps the amount at the lower balance. The remainder is recomputed with a locking current read, including native payment allocations and applied credit/deposit amounts; using only `Facture::getRemainToPay()` here is unsafe under MariaDB `REPEATABLE READ` after a concurrent wait because it may use an older consistent snapshot. The service creates one native payment for one voucher/invoice operation, consumes through `DoliVoucherService::consumeVoucherInTransaction()`, appends the APPLY link, closes a zero-remainder invoice and commits. The nested transaction used by `Paiement::create()` remains controlled by the outer DoliDB transaction. No bank method is called and `fk_bank` is asserted to remain zero.
+
+The unique `(entity, idempotency_key)` constraint makes successful HTTP replay return the existing result. Unique `fk_operation` and `reversal_of` prevent ambiguous links and double reversal. The deletion trigger refuses `PAYMENT_CUSTOMER_DELETE` for an unreversed APPLY event. Controlled reversal uses a private `try/finally` context, rejects banked, reconciled or accounting-exported payments, reopens the invoice when appropriate, deletes the native payment, calls the existing compensation primitive, appends REVERSAL and commits atomically.
+
+The validation-only hook `beforeDoliVoucherInvoiceSettlement` in context `dolivoucherinvoice` runs after both locked objects and the maximum amount have been checked but before any write. Future portfolio/product/customer restrictions may refuse the operation through this hook; they must not write data or implement a parallel consumption path.
+
 ## Extension points
 
-Future invoice, payment, TakePOS and accounting integrations must call the service rather than changing balances directly. They should populate `object_type`, `fk_object`, `external_ref` and use idempotency rules before automatic posting is introduced. No core override or native-object trigger is installed in phase 1.
+Future TakePOS integration must call the Phase 3A settlement service with a future controlled request source rather than implementing another consumption engine. Accounting integration may map the `DVOUCH` payment mode only after explicit SYSCOHADA/TVA decisions. No core override is installed; invoice UI integration uses the native `invoicecard` hook and deletion integrity uses a module trigger.
 
 ## Series invariants
 

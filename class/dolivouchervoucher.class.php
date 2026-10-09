@@ -89,6 +89,9 @@ class DoliVoucherVoucher extends CommonObject
 		if (!$this->portfolioAcceptsVoucher()) {
 			return -1;
 		}
+		if (!$this->identifiersAreAvailable()) {
+			return -1;
+		}
 		if (!$this->seriesMatchesPortfolio()) {
 			return -1;
 		}
@@ -181,5 +184,24 @@ class DoliVoucherVoucher extends CommonObject
 			return false;
 		}
 		return true;
+	}
+
+	private function identifiersAreAvailable(): bool
+	{
+		$sql = 'SELECT ref, barcode FROM '.$this->db->prefix().'dolivoucher_voucher WHERE entity='.(int) $this->entity;
+		$sql .= " AND (ref='".$this->db->escape((string) $this->ref)."'";
+		if (trim((string) $this->barcode) !== '') {
+			$sql .= " OR barcode='".$this->db->escape((string) $this->barcode)."'";
+		}
+		$sql .= ')'.$this->db->plimit(1, 0);
+		$resql = $this->db->query($sql);
+		$row = $resql ? $this->db->fetch_object($resql) : false;
+		if (!$resql) {
+			$this->error = 'ErrorVoucherCreationFailed';
+			return false;
+		}
+		if (!$row) return true;
+		$this->error = ((string) $row->ref === (string) $this->ref) ? 'ErrorVoucherSerialAlreadyExists' : 'ErrorVoucherBarcodeAlreadyExists';
+		return false;
 	}
 }

@@ -4,6 +4,8 @@ Phase 1 is a subledger for voucher custody and audit, not a final statutory-acco
 
 Phase 2 series generation, PDF printing, physical preparation and delivery are also strictly non-financial. They do not reserve portfolio funds, activate or consume a voucher, recognize revenue or tax, create inventory, or release an obligation. Only the explicit Phase 1 activation service reserves value.
 
-It creates no Dolibarr product for face value, stock movement, quotation discount, negative quotation line, customer invoice mutation, invoice payment, bank account, accounting entry or TakePOS integration. The printed support remains distinct from the voucher face value.
+Phase 3A creates a native Dolibarr customer payment and allocation so the invoice remainder, payment lists and mixed settlements stay native. It uses the dedicated `DVOUCH` payment mode and creates no bank line or fictitious bank account. The payment is a representation of voucher coverage, not a second debit of the voucher; the DoliVoucher CONSUME operation remains the subledger movement.
 
-Future phases may consume the operation journal through explicit services or hooks. Invoice/payment, TakePOS and accounting adapters must be independently authorized, idempotent and reversible, and must preserve the phase 1 journal rather than rewriting it.
+It creates no Dolibarr product for face value, stock movement, quotation discount, negative quotation line, bank account, accounting entry or TakePOS integration. The printed support remains distinct from the voucher face value. No SYSCOHADA account, revenue-recognition rule, VAT timing or accounting export mapping is inferred. Payments already banked, reconciled or exported cannot be reversed by Phase 3A.
+
+Future TakePOS and accounting adapters must reuse the settlement service, remain independently authorized and idempotent, and preserve both append-only journals rather than rewriting them.
