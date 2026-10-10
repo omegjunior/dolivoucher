@@ -1,5 +1,12 @@
 # DoliVoucher changelog
 
+## 0.4.0-dev
+
+- Add read-only settlement list, detail and cross-domain reconciliation diagnostics.
+- Add stable diagnostic levels/codes, bounded entity-scoped analysis and formula-safe CSV export.
+- Add a restrictive diagnostic permission, dedicated menus and configurable analysis ceiling.
+- Expose controlled reversal management from paid invoice cards and display reversal reasons in invoice and voucher histories.
+
 ## 0.3.0-dev
 
 - Add atomic voucher settlement of eligible customer invoices through native Dolibarr payments.

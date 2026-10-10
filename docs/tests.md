@@ -1,6 +1,6 @@
 # Tests
 
-The PHPUnit 10 suite is under `test/phpunit`. It contains exact-decimal and production-contract tests for Phases 1 and 2 plus the Phase 3A hybrid payment architecture, locking, idempotence, append-only linkage, deletion trigger, rights, CSRF UI and absence of bank integration.
+The PHPUnit 10 suite is under `test/phpunit`. It contains exact-decimal and production-contract tests for Phases 1 and 2, the Phase 3A hybrid payment architecture, and Phase 3B pure diagnostic rules, read-only contracts, permissions, bounded analysis and CSV formula neutralization.
 
 From the module directory, when `phpunit` is installed:
 
@@ -28,7 +28,7 @@ The guarded transactional smoke test uses the same create/drop isolation and add
 $env:DOLIVOUCHER_INTEGRATION_SMOKE='1'; php test/integration_smoke.php
 ```
 
-The guarded native Phase 3A integration test installs the complete Dolibarr 22 schema and data in a disposable database, installs DoliVoucher through its descriptor, and uses real `Facture` and `Paiement` objects. It covers total/partial/mixed settlement, multiple vouchers and invoices, idempotence, forced rollback checkpoints, native deletion protection, controlled reversal, non-reversible payments and concurrent independent connections for the same key, voucher and invoice:
+The guarded native integration test installs the complete Dolibarr 22 schema and data in a disposable database, installs DoliVoucher through its descriptor, and uses real `Facture` and `Paiement` objects. It covers total/partial/mixed settlement, multiple vouchers and invoices, idempotence, forced rollback checkpoints, native deletion protection, controlled reversal, non-reversible payments and concurrent independent connections for the same key, voucher and invoice. Phase 3B additionally diagnoses active/reversed/exported/banked cases, applies voucher/source filters, checks isolation and proves that diagnostic reads do not change operation, payment or allocation counts:
 
 ```powershell
 $env:DOLIVOUCHER_PHASE3_NATIVE='1'; php test/phase3_native_integration.php

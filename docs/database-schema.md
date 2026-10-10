@@ -48,6 +48,8 @@ Unique indexes enforce `(entity, settlement_uuid)`, `(entity, idempotency_key)`,
 
 The `DVOUCH` row in `llx_c_paiement` is an autonomous type-2 payment mode owned by the module. It creates no bank entry and is distinct from any payment code owned by another module.
 
+Phase 3B adds no table, column or index. Diagnostics use the existing entity/date, UUID, idempotency, invoice, payment, voucher and operation indexes, analyze bounded batches and never materialize a second source of truth.
+
 Exposure values are calculated, not stored:
 
 - immediately redeemable voucher balance: voucher statuses `ACTIVE` and `PARTIALLY_CONSUMED`;

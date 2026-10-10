@@ -36,6 +36,14 @@ The validation-only hook `beforeDoliVoucherInvoiceSettlement` in context `dolivo
 
 Future TakePOS integration must call the Phase 3A settlement service with a future controlled request source rather than implementing another consumption engine. Accounting integration may map the `DVOUCH` payment mode only after explicit SYSCOHADA/TVA decisions. No core override is installed; invoice UI integration uses the native `invoicecard` hook and deletion integrity uses a module trigger.
 
+## Read-only settlement diagnostics
+
+`DoliVoucherSettlementDiagnosticService` is the sole definition of Phase 3B reconciliation rules. It joins the canonical settlement with voucher, operation, invoice, payment mode, payment allocation, reversal and compensating operation in bounded SQL batches. Pages only render its structured checks; they do not redefine anomaly rules. Cross-entity rows expose only identifiers and an `ENTITY_MISMATCH`, never the other entity's labels.
+
+The service emits stable `OK`, `WARNING` and `ERROR` levels and technical codes documented in `settlement-diagnostics.md`. Active APPLY events require one live `DVOUCH` payment and one matching allocation. Controlled reversals require exactly one REVERSAL, a matching CORRECTION operation and the absence of the deleted native payment. Journal balance deltas are checked without comparing a single settlement directly to the voucher's current balance, which may include later operations.
+
+`TAKEPOS` is recognized as a reserved diagnostic source, but Phase 3B contains no writer or TakePOS hook. The Phase 3A writer continues to accept only `INVOICE_CARD`. CSV output shares the same service, entity scope, filters and configured row ceiling as the global page.
+
 ## Series invariants
 
 The standard numbering model only formats a number reserved by the service. The service initializes the `(entity, sequence_type, sequence_year)` counter row, locks it with `FOR UPDATE`, reserves the value and creates the series and vouchers in one SQL transaction. `generation_key` makes a successful HTTP replay idempotent. No `MAX()+1` allocation is used.

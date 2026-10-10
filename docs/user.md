@@ -46,3 +46,13 @@ On an eligible validated standard customer invoice in XOF, use **Use a voucher**
 One voucher may be used on several invoices while it has a usable balance, and an invoice may receive several vouchers or other native payments. Each confirmed use appears as a native Dolibarr payment and in the immutable DoliVoucher histories on both the invoice and voucher. Draft, prepared, blocked, consumed, canceled or expired vouchers are refused, as are non-XOF, deposit and situation invoices.
 
 Do not delete the native payment directly. An authorized user must use **Reverse settlement** with a mandatory reason. The controlled action removes an eligible unbanked/unreconciled/unexported payment, restores the voucher through a compensating journal operation and retains the APPLY/REVERSAL audit chain. The same settlement cannot be reversed twice.
+
+The invoice card keeps a **Manage DoliVoucher settlements** action even after the invoice is fully paid. Use it to open the detailed history, enter the mandatory reversal reason and confirm the controlled action. The reversal reason is also displayed in the detailed invoice and voucher histories.
+
+## Settlement diagnostics
+
+Users with the audit permission can open **DoliVoucher settlements**, search by period, event, source, voucher, invoice, payment, operation or amount, and inspect one settlement. The card shows the preserved snapshots and every reconciliation control. A missing object is displayed by its stored identifier or snapshot without a broken link.
+
+The separate restrictive diagnostic permission opens **Settlement diagnostics** and CSV export. The summary separates consistent rows, warnings and demonstrated errors. A warning, such as a changed native reference, requires review but does not necessarily mean the financial chain is broken. An error means an expected object, entity, amount or canonical relationship is demonstrably inconsistent.
+
+The tool is read-only: it never repairs, deletes, compensates or recreates anything. Exported cells that could be interpreted as spreadsheet formulas are neutralized. Results are limited by the configured maximum and never include another entity's confidential labels.

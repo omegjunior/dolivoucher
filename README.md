@@ -22,7 +22,7 @@ Place this directory at `htdocs/custom/dolivoucher`, then:
 
 1. Log into Dolibarr as a super-administrator.
 2. Go to **Setup > Modules**.
-3. Enable DoliVoucher and allocate its nineteen permissions, including the restrictive invoice-use, settlement-reversal, reprint and delivery rights.
+3. Enable DoliVoucher and allocate its twenty permissions, including the restrictive invoice-use, settlement-reversal, diagnostic, reprint and delivery rights.
 
 The provisional module ID is `501116` and must be reserved or replaced before public distribution.
 
@@ -41,6 +41,12 @@ The administrator can configure `DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES` and `DOLIV
 Phase 3A applies an active voucher to a validated standard customer invoice in XOF. One operation atomically creates an append-only DoliVoucher consumption, a native Dolibarr customer payment using the autonomous `DVOUCH` payment mode, and an immutable link between voucher, operation, invoice and payment. The native payment controls the invoice remainder; the DoliVoucher journal controls the voucher balance. No bank line is created.
 
 Partial use, several vouchers on one invoice, reuse of a remaining voucher balance on another invoice and combination with other payment methods are supported. Multicurrency, deposit and situation invoices are excluded. A controlled reversal deletes only the linked unbanked/unreconciled/unexported native payment, restores the voucher by compensation and appends a reversal link. Direct deletion of an active linked payment is blocked.
+
+## Settlement diagnostics
+
+Phase 3B adds read-only settlement search, detail, reconciliation and CSV export. It compares the canonical settlement link with its voucher, journal operation, optional reversal, native payment, allocation and invoice. Stable `OK`, `WARNING` and `ERROR` controls identify missing objects, entity or amount differences, unexpected bank data, invalid sources and reversals performed outside the controlled workflow. Analysis is entity-scoped and capped by `DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS` (default 1000, hard ceiling 10000).
+
+Diagnostics never create, update, delete or repair business data. The audit right grants settlement list/card access; the separate restrictive diagnostic right grants global analysis, technical details and CSV export. See [settlement diagnostics](docs/settlement-diagnostics.md).
 
 ## Boundaries
 
