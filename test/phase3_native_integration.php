@@ -19,6 +19,7 @@ require_once dirname(__DIR__).'/class/dolivoucherportfolio.class.php';
 require_once dirname(__DIR__).'/class/dolivouchervoucher.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherservice.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherinvoicesettlementservice.class.php';
+require_once dirname(__DIR__).'/class/dolivouchersettlementdiagnosticservice.class.php';
 
 /** @throws RuntimeException */
 function p3Expect(bool $condition, string $message): void
@@ -401,6 +402,32 @@ try {
 	$resultA = p3FinishWorker($workerA); $resultB = p3FinishWorker($workerB);
 	p3Expect(($resultA['exit'] === 0 ? 1 : 0) + ($resultB['exit'] === 0 ? 1 : 0) === 1, 'Same invoice concurrency did not admit exactly one request: '.json_encode(array($resultA, $resultB)));
 	p3Expect(DoliVoucherMoney::compare((string) p3One($db, 'SELECT COALESCE(SUM(amount),0) AS amount FROM llx_paiement_facture WHERE fk_facture='.$sameInvoice)->amount, '5000') === 0, 'Same invoice concurrency overpaid invoice'); $assertions++;
+
+	$diagnosticService = new DoliVoucherSettlementDiagnosticService($db);
+	$mutationBefore = p3One($db, 'SELECT (SELECT COUNT(*) FROM llx_dolivoucher_operation) AS operations, (SELECT COUNT(*) FROM llx_paiement) AS payments, (SELECT COUNT(*) FROM llx_paiement_facture) AS allocations');
+	$totalDiagnostic = $diagnosticService->fetchOne($totalSettlement, 1);
+	p3Expect($totalDiagnostic !== null && $totalDiagnostic['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_OK, 'Active settlement diagnostic is not coherent'); $assertions++;
+	$partialSettlementId = (int) p3One($db, "SELECT rowid FROM llx_dolivoucher_invoice_settlement WHERE fk_facture=".$partialInvoice." AND event_type='APPLY'")->rowid;
+	p3Expect($diagnosticService->fetchOne($partialSettlementId, 1)['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_OK, 'Partial settlement diagnostic is not coherent'); $assertions++;
+	$multiDiagnostics = $diagnosticService->fetchPage(1, array('invoice' => 'P3-MULTI'), 10, 0, 's.date_creation', 'DESC', 1000);
+	p3Expect(count($multiDiagnostics['items']) === 2 && $multiDiagnostics['items'][0]['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_OK && $multiDiagnostics['items'][1]['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_OK, 'Multiple vouchers on one invoice are not coherent'); $assertions++;
+	$splitDiagnostics = $diagnosticService->fetchPage(1, array('voucher' => 'P3-V-SPLIT'), 10, 0, 's.date_creation', 'DESC', 1000);
+	p3Expect(count($splitDiagnostics['items']) === 2, 'One voucher across invoices filter failed'); $assertions++;
+	$pagedDiagnostics = $diagnosticService->fetchPage(1, array(), 1, 0, 's.date_creation', 'DESC', 1000);
+	p3Expect(count($pagedDiagnostics['items']) === 1 && $pagedDiagnostics['has_more'], 'Diagnostic pagination failed'); $assertions++;
+	$reversedDiagnostic = $diagnosticService->fetchOne($applyId, 1);
+	p3Expect($reversedDiagnostic !== null && $reversedDiagnostic['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_OK, 'Reversed settlement diagnostic is not coherent: '.json_encode($reversedDiagnostic)); $assertions++;
+	$exportedDiagnostic = $diagnosticService->fetchOne($exportedApplyId, 1);
+	p3Expect($exportedDiagnostic !== null && $exportedDiagnostic['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_WARNING && in_array(DoliVoucherSettlementDiagnosticService::CODE_PAYMENT_EXPORTED, $exportedDiagnostic['diagnostic']['codes'], true), 'Exported payment warning missing'); $assertions++;
+	$warningDiagnostics = $diagnosticService->fetchPage(1, array('diagnostic_level' => 'WARNING', 'diagnostic_code' => 'PAYMENT_EXPORTED'), 10, 0, 's.date_creation', 'DESC', 1000);
+	p3Expect(count($warningDiagnostics['items']) === 1 && (int) $warningDiagnostics['items'][0]['record']->rowid === $exportedApplyId, 'Diagnostic level/code filters failed'); $assertions++;
+	$bankedDiagnostic = $diagnosticService->fetchOne($bankedApplyId, 1);
+	p3Expect($bankedDiagnostic !== null && $bankedDiagnostic['diagnostic']['level'] === DoliVoucherSettlementDiagnosticService::LEVEL_ERROR && in_array(DoliVoucherSettlementDiagnosticService::CODE_UNEXPECTED_BANK_LINE, $bankedDiagnostic['diagnostic']['codes'], true), 'Unexpected bank line error missing'); $assertions++;
+	$filteredDiagnostics = $diagnosticService->fetchPage(1, array('voucher' => 'P3-V-TOTAL', 'request_source' => 'INVOICE_CARD'), 10, 0, 's.date_creation', 'DESC', 1000);
+	p3Expect(count($filteredDiagnostics['items']) === 1 && (int) $filteredDiagnostics['items'][0]['record']->rowid === $totalSettlement, 'Voucher/source diagnostic filters failed'); $assertions++;
+	$mutationAfter = p3One($db, 'SELECT (SELECT COUNT(*) FROM llx_dolivoucher_operation) AS operations, (SELECT COUNT(*) FROM llx_paiement) AS payments, (SELECT COUNT(*) FROM llx_paiement_facture) AS allocations');
+	p3Expect((string) $mutationBefore->operations === (string) $mutationAfter->operations && (string) $mutationBefore->payments === (string) $mutationAfter->payments && (string) $mutationBefore->allocations === (string) $mutationAfter->allocations, 'Read-only diagnostics mutated financial tables'); $assertions++;
+	p3Expect($diagnosticService->fetchOne($totalSettlement, 2) === null, 'Cross-entity diagnostic access succeeded'); $assertions++;
 
 	p3Expect((int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_bank')->amount === 0 && (int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_bank_url')->amount === 0, 'Phase 3A created bank data'); $assertions++;
 	p3Expect((int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_accounting_bookkeeping')->amount === 0, 'Phase 3A created accounting entries'); $assertions++;

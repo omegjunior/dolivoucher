@@ -351,6 +351,7 @@ final class DoliVoucherContractTest extends TestCase
 		$page = $this->read('invoice_voucher.php');
 
 		self::assertStringContainsString("public const PAYMENT_CODE = 'DVOUCH'", $service);
+		self::assertStringContainsString("/compta/bank/class/account.class.php'", $service);
 		self::assertStringContainsString('new Paiement($this->db)', $service);
 		self::assertStringContainsString('consumeVoucherInTransaction(', $service);
 		self::assertStringContainsString('compensateConsumptionInTransaction(', $service);
@@ -378,6 +379,35 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("hasRight('dolivoucher', 'settlement', 'reverse')", $page);
 		self::assertStringContainsString("\$this->resprints = \$output", $this->read('class/actions_dolivoucher.class.php'));
 		self::assertStringContainsString("\$parameters['colspan']", $this->read('class/actions_dolivoucher.class.php'));
+	}
+
+	public function testSettlementDiagnosticsAreBoundedReadOnlyAndEntityScoped(): void
+	{
+		$service = $this->read('class/dolivouchersettlementdiagnosticservice.class.php');
+		$list = $this->read('settlement_list.php');
+		$card = $this->read('settlement_card.php');
+		$diagnostic = $this->read('settlement_diagnostic.php');
+		$export = $this->read('settlement_diagnostic_export.php');
+		$descriptor = $this->read('core/modules/modDoliVoucher.class.php');
+		self::assertStringContainsString("public const LEVEL_OK = 'OK'", $service);
+		self::assertStringContainsString("public const LEVEL_WARNING = 'WARNING'", $service);
+		self::assertStringContainsString("public const LEVEL_ERROR = 'ERROR'", $service);
+		self::assertStringContainsString('WHERE s.entity=', $service);
+		self::assertStringContainsString('MAX_ROWS_HARD_LIMIT = 10000', $service);
+		self::assertStringNotContainsString('UPDATE ', $service);
+		self::assertStringNotContainsString('INSERT INTO', $service);
+		self::assertStringNotContainsString('DELETE FROM', $service);
+		self::assertStringContainsString("multiSelectArrayWithCheckbox('selectedfields'", $list);
+		self::assertStringContainsString('print_barre_liste(', $list);
+		self::assertStringContainsString("hasRight('dolivoucher', 'audit', 'read')", $list.$card);
+		self::assertStringContainsString("hasRight('dolivoucher', 'settlement', 'diagnose')", $diagnostic.$export);
+		self::assertStringContainsString('neutralizeCsvValue', $export);
+		self::assertStringContainsString("fputcsv(", $export);
+		self::assertStringContainsString("transnoentities('SettlementUuid')", $export);
+		self::assertStringContainsString("dol_print_date(\$db->jdate(\$row->date_creation), 'standard')", $export);
+		self::assertStringContainsString("'settlement', 'diagnose'", $descriptor);
+		self::assertStringContainsString("DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS", $descriptor.$diagnostic.$export);
+		self::assertStringContainsString("SOURCE_TAKEPOS = 'TAKEPOS'", $this->read('class/dolivoucherinvoicesettlement.class.php'));
 	}
 
 	private function read(string $relative): string

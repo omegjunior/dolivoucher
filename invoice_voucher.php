@@ -23,7 +23,8 @@ restrictedArea($user, 'facture', $invoiceId, 'facture');
 
 $canUse = !empty($user->admin) || ($user->hasRight('dolivoucher', 'settlement', 'use') && $user->hasRight('facture', 'paiement'));
 $canReverse = !empty($user->admin) || ($user->hasRight('dolivoucher', 'settlement', 'reverse') && $user->hasRight('facture', 'paiement'));
-if (!$canUse && !$canReverse) accessforbidden();
+$canRead = !empty($user->admin) || $user->hasRight('dolivoucher', 'audit', 'read') || $canUse || $canReverse;
+if (!$canRead) accessforbidden();
 
 $form = new Form($db);
 $service = new DoliVoucherInvoiceSettlementService($db);
@@ -120,24 +121,28 @@ if ($voucher) {
 }
 
 print '<br>'.load_fiche_titre($langs->trans('DoliVoucherSettlements'), '', 'list');
-$sql = 'SELECT s.*, v.ref AS voucher_ref, o.operation_uuid, r.rowid AS reversal_id FROM '.$db->prefix().'dolivoucher_invoice_settlement s';
+$sql = 'SELECT s.*, v.ref AS voucher_ref, o.operation_uuid, o.reason AS operation_reason, r.rowid AS reversal_id, ro.reason AS reversal_reason FROM '.$db->prefix().'dolivoucher_invoice_settlement s';
 $sql .= ' INNER JOIN '.$db->prefix().'dolivoucher_voucher v ON v.rowid=s.fk_voucher AND v.entity=s.entity';
 $sql .= ' INNER JOIN '.$db->prefix().'dolivoucher_operation o ON o.rowid=s.fk_operation AND o.entity=s.entity';
 $sql .= ' LEFT JOIN '.$db->prefix().'dolivoucher_invoice_settlement r ON r.reversal_of=s.rowid';
+$sql .= ' LEFT JOIN '.$db->prefix().'dolivoucher_operation ro ON ro.rowid=r.fk_operation AND ro.entity=s.entity';
 $sql .= ' WHERE s.entity='.$entity.' AND s.fk_facture='.$invoiceId.' ORDER BY s.date_creation DESC, s.rowid DESC';
 $resql = $db->query($sql);
-print '<div class="div-table-responsive"><table class="tagtable liste centpercent"><tr class="liste_titre"><th>'.$langs->trans('Date').'</th><th>'.$langs->trans('Event').'</th><th>'.$langs->trans('SettlementUuid').'</th><th>'.$langs->trans('Operation').'</th><th>'.$langs->trans('Voucher').'</th><th>'.$langs->trans('Payment').'</th><th class="right">'.$langs->trans('Amount').'</th><th></th></tr>';
+print '<div class="div-table-responsive"><table class="tagtable liste centpercent"><tr class="liste_titre"><th>'.$langs->trans('Date').'</th><th>'.$langs->trans('Event').'</th><th>'.$langs->trans('SettlementUuid').'</th><th>'.$langs->trans('Operation').'</th><th>'.$langs->trans('Voucher').'</th><th>'.$langs->trans('Payment').'</th><th class="right">'.$langs->trans('Amount').'</th><th>'.$langs->trans('ReversalReason').'</th><th></th></tr>';
 $found = false;
 while ($resql && ($row = $db->fetch_object($resql))) {
 	$found = true;
 	$operationLink = '<a href="operation_list.php?search_uuid='.urlencode($row->operation_uuid).'">'.dol_escape_htmltag($row->operation_uuid).'</a>';
-	print '<tr class="oddeven"><td>'.dol_print_date($db->jdate($row->date_creation), 'dayhour').'</td><td>'.$langs->trans('Settlement'.$row->event_type).'</td><td>'.dol_escape_htmltag($row->settlement_uuid).'</td><td>'.$operationLink.'</td><td><a href="voucher_card.php?id='.(int) $row->fk_voucher.'">'.dol_escape_htmltag($row->voucher_ref).'</a></td>';
-	print '<td><a href="'.DOL_URL_ROOT.'/compta/paiement/card.php?id='.(int) $row->fk_paiement.'">'.dol_escape_htmltag($row->payment_ref_snapshot).'</a></td><td class="right">'.price($row->amount, 0, $langs, 1, -1, -1, $conf->currency).'</td><td class="right">';
+	print '<tr class="oddeven"><td>'.dol_print_date($db->jdate($row->date_creation), 'dayhour').'</td><td>'.$langs->trans('Settlement'.$row->event_type).'</td><td><a href="settlement_card.php?id='.(int) $row->rowid.'">'.dol_escape_htmltag($row->settlement_uuid).'</a></td><td>'.$operationLink.'</td><td><a href="voucher_card.php?id='.(int) $row->fk_voucher.'">'.dol_escape_htmltag($row->voucher_ref).'</a></td>';
+	$reason = (string) ($row->event_type === DoliVoucherInvoiceSettlement::EVENT_REVERSAL ? $row->operation_reason : $row->reversal_reason);
+	$paymentDisplay = dol_escape_htmltag((string) $row->payment_ref_snapshot);
+	$paymentLink = $row->event_type === DoliVoucherInvoiceSettlement::EVENT_REVERSAL || !empty($row->reversal_id) ? $paymentDisplay : '<a href="'.DOL_URL_ROOT.'/compta/paiement/card.php?id='.(int) $row->fk_paiement.'">'.$paymentDisplay.'</a>';
+	print '<td>'.$paymentLink.'</td><td class="right">'.price($row->amount, 0, $langs, 1, -1, -1, $conf->currency).'</td><td title="'.dol_escape_htmltag($reason).'">'.dol_trunc(dol_escape_htmltag($reason), 80).'</td><td class="right">';
 	if ($row->event_type === DoliVoucherInvoiceSettlement::EVENT_APPLY && empty($row->reversal_id) && $canReverse) {
 		print '<form class="inline-block" method="POST"><input type="hidden" name="token" value="'.newToken().'"><input type="hidden" name="action" value="ask_reverse"><input type="hidden" name="facid" value="'.$invoiceId.'"><input type="hidden" name="settlement_id" value="'.(int) $row->rowid.'"><input type="hidden" name="idempotency_key" value="'.dol_escape_htmltag(DoliVoucherService::uuid()).'"><input class="minwidth200" name="reason" required placeholder="'.$langs->trans('Reason').'"><input type="submit" class="button button-delete" value="'.$langs->trans('ReverseVoucherSettlement').'"></form>';
 	}
 	print '</td></tr>';
 }
-if (!$found) print '<tr class="oddeven"><td colspan="8" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+if (!$found) print '<tr class="oddeven"><td colspan="9" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
 print '</table></div>';
 llxFooter();

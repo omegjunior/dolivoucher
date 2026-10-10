@@ -15,7 +15,7 @@ class ActionsDoliVoucher
 
 	public function addMoreActionsButtons($parameters, &$object, &$action, $hookmanager): int
 	{
-		global $conf, $langs, $user;
+		global $conf, $db, $langs, $user;
 		if (strpos((string) ($parameters['currentcontext'] ?? ''), 'invoicecard') === false || !is_object($object) || ($object->element ?? '') !== 'facture') return 0;
 		$canUse = !empty($user->admin) || ($user->hasRight('dolivoucher', 'settlement', 'use') && $user->hasRight('facture', 'paiement'));
 		$invoiceCurrency = empty($object->multicurrency_code) ? (string) $conf->currency : (string) $object->multicurrency_code;
@@ -29,6 +29,16 @@ class ActionsDoliVoucher
 		if ((int) $object->status === Facture::STATUS_VALIDATED && $eligibleType && $invoiceCurrency === (string) $conf->currency && $positiveRemainder) {
 			$url = dol_buildpath('/dolivoucher/invoice_voucher.php', 1).'?facid='.(int) $object->id;
 			print dolGetButtonAction($langs->trans('UseVoucherOnInvoice'), '', 'default', $url, '', $canUse);
+		}
+		$canRead = !empty($user->admin) || $user->hasRight('dolivoucher', 'audit', 'read') || $user->hasRight('dolivoucher', 'settlement', 'use') || $user->hasRight('dolivoucher', 'settlement', 'reverse');
+		$resql = false;
+		if ($canRead) {
+			$sql = 'SELECT rowid FROM '.$db->prefix().'dolivoucher_invoice_settlement WHERE entity='.(int) $conf->entity.' AND fk_facture='.(int) $object->id.$db->plimit(1, 0);
+			$resql = $db->query($sql);
+		}
+		if ($resql && $db->fetch_object($resql)) {
+			$url = dol_buildpath('/dolivoucher/invoice_voucher.php', 1).'?facid='.(int) $object->id;
+			print dolGetButtonAction($langs->trans('ManageDoliVoucherSettlements'), '', 'default', $url, '', $canRead);
 		}
 		return 0;
 	}
@@ -45,7 +55,8 @@ class ActionsDoliVoucher
 		$resql = $db->query($sql);
 		if (!$resql || $db->num_rows($resql) === 0) return 0;
 		$colspan = !empty($parameters['colspan']) ? (string) $parameters['colspan'] : ' colspan="3"';
-		$output = '<tr class="dolivoucher-invoice-settlements"><td class="tdtop">'.$langs->trans('DoliVoucherSettlements').'</td><td'.$colspan.'>';
+		$historyUrl = dol_buildpath('/dolivoucher/invoice_voucher.php', 1).'?facid='.(int) $object->id;
+		$output = '<tr class="dolivoucher-invoice-settlements"><td class="tdtop"><a href="'.dol_escape_htmltag($historyUrl).'">'.$langs->trans('DoliVoucherSettlements').'</a></td><td'.$colspan.'>';
 		$output .= '<div class="div-table-responsive"><table class="noborder centpercent">';
 		while ($row = $db->fetch_object($resql)) {
 			$output .= '<tr class="oddeven"><td class="nowrap">'.dol_print_date($db->jdate($row->date_creation), 'day').'</td>';

@@ -21,7 +21,7 @@ class modDoliVoucher extends DolibarrModules
 		$this->descriptionlong = 'DoliVoucherDescription';
 		$this->editor_name = 'Fred Omega Junior';
 		$this->editor_url = 'https://www.linkedin.com/in/frédéric-h-887621160';
-		$this->version = '0.3.0-dev';
+		$this->version = '0.4.0-dev';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-gavel';
 		$this->module_parts = array('triggers' => 1, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 1, 'printing' => 1, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array('invoicecard'), 'moduleforexternal' => 0);
@@ -40,6 +40,7 @@ class modDoliVoucher extends DolibarrModules
 		$this->const = array(
 			array('DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES', 'chaine', '1000', 'DoliVoucherMaxVouchersPerSeries', 0, 'current', 1),
 			array('DOLIVOUCHER_MAX_VOUCHERS_PER_PDF', 'chaine', '1000', 'DoliVoucherMaxVouchersPerPdf', 0, 'current', 1),
+			array('DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS', 'chaine', '1000', 'DoliVoucherDiagnosticMaxRows', 0, 'current', 1),
 		);
 		if (!isModEnabled('dolivoucher')) {
 			$conf->dolivoucher = new stdClass();
@@ -71,6 +72,7 @@ class modDoliVoucher extends DolibarrModules
 			array(50111617, 'DoliVoucherPermissionSeriesDeliver', 'series', 'deliver'),
 			array(50111618, 'DoliVoucherPermissionInvoiceSettlementUse', 'settlement', 'use'),
 			array(50111619, 'DoliVoucherPermissionInvoiceSettlementReverse', 'settlement', 'reverse'),
+			array(50111620, 'DoliVoucherPermissionSettlementDiagnose', 'settlement', 'diagnose'),
 		);
 		foreach ($permissions as $permission) {
 			$r = count($this->rights);
@@ -91,6 +93,8 @@ class modDoliVoucher extends DolibarrModules
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'VoucherSeries', 'dolivoucher', 'series', '/dolivoucher/series_list.php', '$user->hasRight("dolivoucher", "series", "read")', $r, 'fa-layer-group');
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher,fk_leftmenu=series', 'left', 'NewVoucherSeries', 'dolivoucher', 'series_new', '/dolivoucher/series_card.php?action=create', '$user->hasRight("dolivoucher", "series", "generate")', $r);
 		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'OperationJournal', 'dolivoucher', 'operation_journal', '/dolivoucher/operation_list.php', '$user->hasRight("dolivoucher", "audit", "read")', $r, 'fa-list-alt');
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'DoliVoucherSettlements', 'dolivoucher', 'settlements', '/dolivoucher/settlement_list.php', '$user->hasRight("dolivoucher", "audit", "read")', $r, 'fa-money-check-alt');
+		$this->menu[$r++] = $this->menuEntry('fk_mainmenu=dolivoucher', 'left', 'SettlementDiagnostic', 'dolivoucher', 'settlement_diagnostic', '/dolivoucher/settlement_diagnostic.php', '$user->hasRight("dolivoucher", "settlement", "diagnose")', $r, 'fa-search');
 	}
 
 	/** @return array<string,mixed> */

@@ -9,3 +9,5 @@ Phase 3A creates a native Dolibarr customer payment and allocation so the invoic
 It creates no Dolibarr product for face value, stock movement, quotation discount, negative quotation line, bank account, accounting entry or TakePOS integration. The printed support remains distinct from the voucher face value. No SYSCOHADA account, revenue-recognition rule, VAT timing or accounting export mapping is inferred. Payments already banked, reconciled or exported cannot be reversed by Phase 3A.
 
 Future TakePOS and accounting adapters must reuse the settlement service, remain independently authorized and idempotent, and preserve both append-only journals rather than rewriting them.
+
+Phase 3B is observational only. Its diagnostic service and CSV export never create a payment, allocation, bank line, journal operation, accounting entry, compensation or repair. A diagnostic warning or error is a support signal, not an accounting adjustment instruction.

@@ -11,6 +11,8 @@ class DoliVoucherInvoiceSettlement extends CommonObject
 	public const EVENT_APPLY = 'APPLY';
 	public const EVENT_REVERSAL = 'REVERSAL';
 	public const SOURCE_INVOICE_CARD = 'INVOICE_CARD';
+	/** Reserved for the future TakePOS adapter; Phase 3B does not write this source. */
+	public const SOURCE_TAKEPOS = 'TAKEPOS';
 
 	public $module = 'dolivoucher';
 	public $element = 'dolivoucher_invoice_settlement';
