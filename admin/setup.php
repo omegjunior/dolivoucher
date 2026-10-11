@@ -14,12 +14,17 @@ if ($action === 'save') {
 	$maxSeries = GETPOSTINT('DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES');
 	$maxPdf = GETPOSTINT('DOLIVOUCHER_MAX_VOUCHERS_PER_PDF');
 	$maxDiagnosticRows = GETPOSTINT('DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS');
-	if ($maxSeries < 1 || $maxSeries > 999999 || $maxPdf < 1 || $maxPdf > $maxSeries || $maxDiagnosticRows < 1 || $maxDiagnosticRows > 10000) {
+	$takePosEnabled = getDolGlobalInt('DOLIVOUCHER_TAKEPOS_ENABLED') ? 1 : 0;
+	$takePosMax = GETPOSTINT('DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE');
+	$takePosTtl = GETPOSTINT('DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES');
+	if (($takePosEnabled && getDolGlobalInt('TAKEPOS_DELAYED_TERMS') > 0) || $maxSeries < 1 || $maxSeries > 999999 || $maxPdf < 1 || $maxPdf > $maxSeries || $maxDiagnosticRows < 1 || $maxDiagnosticRows > 10000 || $takePosMax < 1 || $takePosMax > 100 || $takePosTtl < 1 || $takePosTtl > 1440) {
 		setEventMessages($langs->trans('ErrorInvalidDoliVoucherLimits'), null, 'errors');
 	} else {
 		dolibarr_set_const($db, 'DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES', (string) $maxSeries, 'chaine', 0, '', (int) $conf->entity);
 		dolibarr_set_const($db, 'DOLIVOUCHER_MAX_VOUCHERS_PER_PDF', (string) $maxPdf, 'chaine', 0, '', (int) $conf->entity);
 		dolibarr_set_const($db, 'DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS', (string) $maxDiagnosticRows, 'chaine', 0, '', (int) $conf->entity);
+		dolibarr_set_const($db, 'DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE', (string) $takePosMax, 'chaine', 0, '', (int) $conf->entity);
+		dolibarr_set_const($db, 'DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES', (string) $takePosTtl, 'chaine', 0, '', (int) $conf->entity);
 		setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
 	}
 }
@@ -34,7 +39,17 @@ print '<input type="hidden" name="token" value="'.newToken().'"><input type="hid
 print '<table class="noborder centpercent"><tr class="liste_titre"><th colspan="2">'.$langs->trans('SeriesGenerationLimits').'</th></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherMaxVouchersPerSeries').'</td><td><input type="number" min="1" max="999999" name="DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES" value="'.getDolGlobalInt('DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES', 1000).'"></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherMaxVouchersPerPdf').'</td><td><input type="number" min="1" max="999999" name="DOLIVOUCHER_MAX_VOUCHERS_PER_PDF" value="'.getDolGlobalInt('DOLIVOUCHER_MAX_VOUCHERS_PER_PDF', 1000).'"></td></tr>';
-print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherDiagnosticMaxRows').'</td><td><input type="number" min="1" max="10000" name="DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS" value="'.getDolGlobalInt('DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS', 1000).'"> <span class="opacitymedium">'.$langs->trans('DoliVoucherDiagnosticMaxRowsHelp').'</span></td></tr></table>';
+print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherDiagnosticMaxRows').'</td><td><input type="number" min="1" max="10000" name="DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS" value="'.getDolGlobalInt('DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS', 1000).'"> <span class="opacitymedium">'.$langs->trans('DoliVoucherDiagnosticMaxRowsHelp').'</span></td></tr>';
+print '<tr class="liste_titre"><th colspan="2">'.$langs->trans('TakePosIntegration').'</th></tr>';
+print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherTakePosEnabled').'</td><td>';
+if (getDolGlobalInt('TAKEPOS_DELAYED_TERMS') > 0) {
+	print img_picto($langs->trans('Disabled'), 'switch_off').' <span class="warning">'.$langs->trans('ErrorTakePosDelayedTermsIncompatible').'</span>';
+} else {
+	print ajax_constantonoff('DOLIVOUCHER_TAKEPOS_ENABLED', array(), (int) $conf->entity, 0, 0, 1, 2, 0, 1);
+}
+print '</td></tr>';
+print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherTakePosMaxVouchers').'</td><td><input type="number" min="1" max="100" name="DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE" value="'.getDolGlobalInt('DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE', 10).'"></td></tr>';
+print '<tr class="oddeven"><td>'.$langs->trans('DoliVoucherTakePosIntentTtl').'</td><td><input type="number" min="1" max="1440" name="DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES" value="'.getDolGlobalInt('DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES', 30).'"></td></tr></table>';
 print '<div class="center"><input class="button button-save" type="submit" value="'.$langs->trans('Save').'"></div></form>';
 print dol_get_fiche_end();
 llxFooter();

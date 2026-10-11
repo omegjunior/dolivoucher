@@ -44,6 +44,7 @@ try {
 		'llx_dolivoucher_series_event.sql',
 		'llx_dolivoucher_series_event_voucher.sql',
 		'llx_dolivoucher_invoice_settlement.sql',
+		'llx_dolivoucher_takepos_intent.sql',
 		'llx_dolivoucher_portfolio.key.sql',
 		'llx_dolivoucher_sequence.key.sql',
 		'llx_dolivoucher_series.key.sql',
@@ -52,6 +53,7 @@ try {
 		'llx_dolivoucher_series_event.key.sql',
 		'llx_dolivoucher_series_event_voucher.key.sql',
 		'llx_dolivoucher_invoice_settlement.key.sql',
+		'llx_dolivoucher_takepos_intent.key.sql',
 	);
 	foreach ($files as $file) {
 		$sql = (string) file_get_contents(dirname(__DIR__).'/sql/'.$file);
@@ -62,14 +64,14 @@ try {
 			}
 		}
 	}
-	$result = $db->query("SELECT COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema='".$db->escape($testDatabase)."' AND table_name IN ('llx_dolivoucher_portfolio','llx_dolivoucher_voucher','llx_dolivoucher_operation','llx_dolivoucher_series','llx_dolivoucher_sequence','llx_dolivoucher_series_event','llx_dolivoucher_series_event_voucher','llx_dolivoucher_invoice_settlement')");
+	$result = $db->query("SELECT COUNT(*) AS table_count FROM information_schema.tables WHERE table_schema='".$db->escape($testDatabase)."' AND table_name IN ('llx_dolivoucher_portfolio','llx_dolivoucher_voucher','llx_dolivoucher_operation','llx_dolivoucher_series','llx_dolivoucher_sequence','llx_dolivoucher_series_event','llx_dolivoucher_series_event_voucher','llx_dolivoucher_invoice_settlement','llx_dolivoucher_takepos_intent')");
 	$row = $result ? $db->fetch_object($result) : false;
-	if (!$row || (int) $row->table_count !== 8) {
-		throw new RuntimeException('Schema smoke test did not create all eight tables');
+	if (!$row || (int) $row->table_count !== 9) {
+		throw new RuntimeException('Schema smoke test did not create all nine tables');
 	}
-	$paymentMode = $db->query("SELECT id FROM llx_c_paiement WHERE entity=1 AND code='DVOUCH' AND active=1");
+	$paymentMode = $db->query("SELECT id FROM llx_c_paiement WHERE entity=1 AND code='DVOUCH' AND active=0 AND module='dolivoucher'");
 	if (!$paymentMode || !$db->fetch_object($paymentMode)) throw new RuntimeException('DVOUCH payment mode was not installed');
-	echo "DoliVoucher SQL schema smoke test: OK (8 tables and DVOUCH payment mode).\n";
+	echo "DoliVoucher SQL schema smoke test: OK (9 tables and DVOUCH payment mode).\n";
 } finally {
 	$db->query('USE `'.$db->escape($originalDatabase).'`');
 	if ($created) {

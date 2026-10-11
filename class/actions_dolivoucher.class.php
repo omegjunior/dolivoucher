@@ -16,6 +16,13 @@ class ActionsDoliVoucher
 	public function addMoreActionsButtons($parameters, &$object, &$action, $hookmanager): int
 	{
 		global $conf, $db, $langs, $user;
+		$langs->load('dolivoucher@dolivoucher');
+		if (strpos((string) ($parameters['currentcontext'] ?? ''), 'takepospay') !== false) {
+			$enabled = getDolGlobalInt('DOLIVOUCHER_TAKEPOS_ENABLED') && getDolGlobalInt('TAKEPOS_DELAYED_TERMS') <= 0;
+			$allowed = !empty($user->admin) || ($user->hasRight('takepos', 'run') && $user->hasRight('dolivoucher', 'settlement', 'use') && $user->hasRight('facture', 'paiement') && $user->hasRight('facture', 'creer'));
+			if ($enabled && $allowed && is_object($object) && (int) $object->id > 0) print '<button id="dolivoucher-takepos-open" type="button" class="calcbutton2" onclick="DoliVoucherTakePosOpen();"><span class="fa fa-2x fa-ticket-alt iconwithlabel"></span><br>'.$langs->trans('TakePosVoucherButton').'</button>';
+			return 0;
+		}
 		if (strpos((string) ($parameters['currentcontext'] ?? ''), 'invoicecard') === false || !is_object($object) || ($object->element ?? '') !== 'facture') return 0;
 		$canUse = !empty($user->admin) || ($user->hasRight('dolivoucher', 'settlement', 'use') && $user->hasRight('facture', 'paiement'));
 		$invoiceCurrency = empty($object->multicurrency_code) ? (string) $conf->currency : (string) $object->multicurrency_code;
@@ -40,6 +47,22 @@ class ActionsDoliVoucher
 			$url = dol_buildpath('/dolivoucher/invoice_voucher.php', 1).'?facid='.(int) $object->id;
 			print dolGetButtonAction($langs->trans('ManageDoliVoucherSettlements'), '', 'default', $url, '', $canRead);
 		}
+		return 0;
+	}
+
+	public function completePayment($parameters, &$object, &$action, $hookmanager): int
+	{
+		global $langs;
+		$langs->load('dolivoucher@dolivoucher');
+		if (strpos((string) ($parameters['currentcontext'] ?? ''), 'takepospay') === false || !getDolGlobalInt('DOLIVOUCHER_TAKEPOS_ENABLED') || getDolGlobalInt('TAKEPOS_DELAYED_TERMS') > 0) return 0;
+		$place = GETPOST('place', 'alphanohtml');
+		$this->resprints = '<script src="'.dol_buildpath('/dolivoucher/js/dolivoucher_takepos.js.php', 1).'"></script>';
+		$this->resprints .= '<div id="dolivoucher-takepos-panel" style="display:none;position:fixed;z-index:9999;left:10%;top:8%;width:80%;background:#fff;padding:20px;border:2px solid #666;color:#222">';
+		$this->resprints .= '<h3>'.$langs->trans('TakePosVoucherButton').'</h3><div class="warning">'.$langs->trans('TakePosVoucherSagaWarning').'</div><form id="dolivoucher-takepos-form">';
+		$this->resprints .= '<input type="hidden" id="dolivoucher-takepos-invoice" value="'.(int) $object->id.'"><input type="hidden" id="dolivoucher-takepos-place" value="'.dol_escape_htmltag($place).'">';
+		$this->resprints .= '<label>'.$langs->trans('VoucherSerialOrBarcode').'</label><br><input id="dolivoucher-takepos-identifier" class="minwidth300" autocomplete="off" required autofocus><br>';
+		$this->resprints .= '<div id="dolivoucher-takepos-details" class="opacitymedium"></div><label>'.$langs->trans('Amount').'</label><br><input id="dolivoucher-takepos-amount" class="minwidth150" inputmode="decimal"><div id="dolivoucher-takepos-message"></div>';
+		$this->resprints .= '<div class="center"><a id="dolivoucher-takepos-submit" class="butAction" href="#">'.$langs->trans('Confirm').'</a> <a id="dolivoucher-takepos-cancel" class="butAction" href="#">'.$langs->trans('Cancel').'</a></div></form></div>';
 		return 0;
 	}
 

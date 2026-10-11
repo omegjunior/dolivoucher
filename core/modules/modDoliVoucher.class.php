@@ -21,10 +21,10 @@ class modDoliVoucher extends DolibarrModules
 		$this->descriptionlong = 'DoliVoucherDescription';
 		$this->editor_name = 'Fred Omega Junior';
 		$this->editor_url = 'https://www.linkedin.com/in/frédéric-h-887621160';
-		$this->version = '0.4.0-dev';
+		$this->version = '0.5.0-dev';
 		$this->const_name = 'MAIN_MODULE_'.strtoupper($this->name);
 		$this->picto = 'fa-gavel';
-		$this->module_parts = array('triggers' => 1, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 1, 'printing' => 1, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array('invoicecard'), 'moduleforexternal' => 0);
+		$this->module_parts = array('triggers' => 1, 'login' => 0, 'substitutions' => 0, 'menus' => 0, 'tpl' => 0, 'barcode' => 0, 'models' => 1, 'printing' => 1, 'theme' => 0, 'css' => array(), 'js' => array(), 'hooks' => array('invoicecard', 'takepospay'), 'moduleforexternal' => 0);
 		$this->dirs = array('/dolivoucher/temp', '/dolivoucher/series');
 		$this->config_page_url = array('setup.php@dolivoucher');
 		$this->hidden = getDolGlobalInt('MODULE_DOLIVOUCHER_DISABLED');
@@ -41,6 +41,9 @@ class modDoliVoucher extends DolibarrModules
 			array('DOLIVOUCHER_MAX_VOUCHERS_PER_SERIES', 'chaine', '1000', 'DoliVoucherMaxVouchersPerSeries', 0, 'current', 1),
 			array('DOLIVOUCHER_MAX_VOUCHERS_PER_PDF', 'chaine', '1000', 'DoliVoucherMaxVouchersPerPdf', 0, 'current', 1),
 			array('DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS', 'chaine', '1000', 'DoliVoucherDiagnosticMaxRows', 0, 'current', 1),
+			array('DOLIVOUCHER_TAKEPOS_ENABLED', 'yesno', '0', 'DoliVoucherTakePosEnabled', 0, 'current', 1),
+			array('DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE', 'chaine', '10', 'DoliVoucherTakePosMaxVouchers', 0, 'current', 1),
+			array('DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES', 'chaine', '30', 'DoliVoucherTakePosIntentTtl', 0, 'current', 1),
 		);
 		if (!isModEnabled('dolivoucher')) {
 			$conf->dolivoucher = new stdClass();

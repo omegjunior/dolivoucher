@@ -1,5 +1,14 @@
 # DoliVoucher changelog
 
+## 0.5.0-dev
+
+- Add an opt-in, module-only TakePOS voucher-payment saga using native delayed validation.
+- Persist idempotent technical intentions so interrupted payments remain visible and recoverable.
+- Reuse the Phase 3A settlement engine with `TAKEPOS` as the controlled request source.
+- Add TakePOS configuration, rights-aware hooks, a dedicated panel and server-side safeguards.
+- Keep `DVOUCH` inactive in native payment selectors so cashiers cannot bypass voucher identification or the saga.
+- Keep TakePOS stock handling native and create no bank line or accounting entry.
+
 ## 0.4.0-dev
 
 - Add read-only settlement list, detail and cross-domain reconciliation diagnostics.

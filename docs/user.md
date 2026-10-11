@@ -56,3 +56,8 @@ Users with the audit permission can open **DoliVoucher settlements**, search by 
 The separate restrictive diagnostic permission opens **Settlement diagnostics** and CSV export. The summary separates consistent rows, warnings and demonstrated errors. A warning, such as a changed native reference, requires review but does not necessarily mean the financial chain is broken. An error means an expected object, entity, amount or canonical relationship is demonstrably inconsistent.
 
 The tool is read-only: it never repairs, deletes, compensates or recreates anything. Exported cells that could be interpreted as spreadsheet formulas are neutralized. Results are limited by the configured maximum and never include another entity's confidential labels.
+# TakePOS voucher payment
+
+An administrator must explicitly enable TakePOS support in DoliVoucher setup. In the TakePOS payment popup, an authorized operator can choose **Bon DoliVoucher**, scan or enter an exact voucher reference or barcode, and optionally reduce the proposed amount. The sale is validated first; only after server verification is the voucher applied.
+
+If validation succeeds but settlement fails, the invoice remains validated with an amount due and the voucher is not debited. The operator may retry or use another payment method. Cancelling a technical intention never changes the invoice, stock or voucher. `BONACH` remains a separate historical payment action.

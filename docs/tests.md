@@ -16,7 +16,7 @@ php ../dolideo/test/phpunit/phpunit-10.5.phar -c test/phpunit/phpunit.xml
 
 The contract suite does not require or mutate a database.
 
-The guarded schema smoke test creates a uniquely named isolated database, executes all table and key files, verifies the eight module tables and the `DVOUCH` payment mode, then removes that database:
+The guarded schema smoke test creates a uniquely named isolated database, executes all table and key files, verifies the nine module tables and the `DVOUCH` payment mode, then removes that database:
 
 ```powershell
 $env:DOLIVOUCHER_SQL_SMOKE='1'; php test/sql_schema_smoke.php
@@ -35,3 +35,8 @@ $env:DOLIVOUCHER_PHASE3_NATIVE='1'; php test/phase3_native_integration.php
 ```
 
 The database name is generated under the strict `dolivoucher_phase3_native_*` prefix and is dropped in `finally`. Run this only with a MariaDB account allowed to create and drop databases. Browser-level CSRF and rendered PDF checks remain manual because this CLI suite does not authenticate an HTTP session or write into the production document directory.
+# Phase 4
+
+Phase 4 contract tests cover the persistent intent schema, stable transitions, module-only hook, POST endpoint, native delayed request, Phase 3A service reuse and absence of bank API calls. SQL smoke now installs nine module tables. Native disposable-database validation verified a standard and a batch-managed TakePOS sale: each invoice and stock movement was produced once, with zero payment, allocation or bank row, and the invoice remained payable.
+
+Browser acceptance remains required for native TakePOS and DoliLnd popups, scanners, mixed payments, interruption/retry, ticket output and role profiles.

@@ -78,6 +78,7 @@ class DoliVoucherInvoiceSettlementService
 
 			$invoiceRow = $this->lockInvoice($invoiceId, $entity);
 			$this->lockInvoicePayments($invoiceId);
+			if ($requestSource === DoliVoucherInvoiceSettlement::SOURCE_TAKEPOS) $this->assertTakePosVoucherLimit($invoiceId, $entity);
 			$this->checkpoint('after_invoice_lock');
 			$invoice = new Facture($this->db);
 			if ($invoice->fetch($invoiceId) <= 0 || (int) $invoice->entity !== $entity) throw new DomainException('ErrorRecordNotFound');
@@ -267,7 +268,7 @@ class DoliVoucherInvoiceSettlementService
 
 	private function paymentModeId(int $entity): int
 	{
-		$row = $this->queryOne('SELECT id FROM '.$this->db->prefix().'c_paiement WHERE entity='.$entity." AND code='".self::PAYMENT_CODE."' AND active=1 LIMIT 1");
+		$row = $this->queryOne('SELECT id FROM '.$this->db->prefix().'c_paiement WHERE entity='.$entity." AND code='".self::PAYMENT_CODE."' AND module='dolivoucher' LIMIT 1");
 		if (!$row) throw new DomainException('ErrorDoliVoucherPaymentModeMissing');
 		return (int) $row->id;
 	}
@@ -353,7 +354,18 @@ class DoliVoucherInvoiceSettlementService
 
 	private function validateSource(string $source): string
 	{
-		return in_array($source, array(DoliVoucherInvoiceSettlement::SOURCE_INVOICE_CARD), true) ? $source : DoliVoucherInvoiceSettlement::SOURCE_INVOICE_CARD;
+		if (!in_array($source, array(DoliVoucherInvoiceSettlement::SOURCE_INVOICE_CARD, DoliVoucherInvoiceSettlement::SOURCE_TAKEPOS), true)) throw new InvalidArgumentException('ErrorInvalidRequestSource');
+		return $source;
+	}
+
+	private function assertTakePosVoucherLimit(int $invoiceId, int $entity): void
+	{
+		$limit = max(1, min(100, getDolGlobalInt('DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE', 10)));
+		$sql = 'SELECT COUNT(*) AS amount FROM '.$this->db->prefix().'dolivoucher_invoice_settlement s';
+		$sql .= ' LEFT JOIN '.$this->db->prefix().'dolivoucher_invoice_settlement r ON r.reversal_of=s.rowid AND r.entity=s.entity';
+		$sql .= ' WHERE s.entity='.$entity.' AND s.fk_facture='.$invoiceId." AND s.event_type='APPLY' AND s.request_source='TAKEPOS' AND r.rowid IS NULL";
+		$row = $this->queryOne($sql);
+		if ((int) ($row->amount ?? 0) >= $limit) throw new DomainException('ErrorTakePosVoucherLimitReached');
 	}
 
 	private function isZeroOrNegative(string $amount): bool

@@ -37,4 +37,24 @@ final class DoliVoucherMoney
 		$integerComparison = strcmp($li, $ri);
 		return $integerComparison !== 0 ? ($integerComparison < 0 ? -1 : 1) : (strcmp($lf, $rf) <=> 0);
 	}
+
+	/** Add two non-negative fixed-scale monetary values without using floating point arithmetic. */
+	public static function add(string $left, string $right): string
+	{
+		$left = str_replace('.', '', self::normalize($left));
+		$right = str_replace('.', '', self::normalize($right));
+		$length = max(strlen($left), strlen($right));
+		$left = str_pad($left, $length, '0', STR_PAD_LEFT);
+		$right = str_pad($right, $length, '0', STR_PAD_LEFT);
+		$result = '';
+		$carry = 0;
+		for ($index = $length - 1; $index >= 0; $index--) {
+			$sum = (int) $left[$index] + (int) $right[$index] + $carry;
+			$result = (string) ($sum % 10).$result;
+			$carry = intdiv($sum, 10);
+		}
+		if ($carry > 0) $result = (string) $carry.$result;
+		$result = str_pad($result, self::SCALE + 1, '0', STR_PAD_LEFT);
+		return self::normalize(substr($result, 0, -self::SCALE).'.'.substr($result, -self::SCALE));
+	}
 }

@@ -36,6 +36,8 @@ final class DoliVoucherSettlementDiagnosticService
 	public const CODE_PAYMENT_REFERENCE_CHANGED = 'PAYMENT_REFERENCE_CHANGED';
 	public const CODE_PAYMENT_EXPORTED = 'PAYMENT_EXPORTED';
 	public const CODE_PAYMENT_RECONCILED = 'PAYMENT_RECONCILED';
+	public const CODE_TAKEPOS_INTENT_MISSING = 'TAKEPOS_INTENT_MISSING';
+	public const CODE_TAKEPOS_INTENT_MISMATCH = 'TAKEPOS_INTENT_MISMATCH';
 
 	public const SOURCE_INVOICE_CARD = 'INVOICE_CARD';
 	public const SOURCE_TAKEPOS = 'TAKEPOS';
@@ -143,6 +145,10 @@ final class DoliVoucherSettlementDiagnosticService
 
 		if (!in_array((string) ($row->request_source ?? ''), array(self::SOURCE_INVOICE_CARD, self::SOURCE_TAKEPOS), true)) {
 			$this->addCheck($checks, self::CODE_INVALID_REQUEST_SOURCE, self::LEVEL_ERROR);
+		}
+		if ((string) ($row->request_source ?? '') === self::SOURCE_TAKEPOS) {
+			if ((int) ($row->takepos_intent_count ?? 0) === 0) $this->addCheck($checks, self::CODE_TAKEPOS_INTENT_MISSING, self::LEVEL_ERROR);
+			elseif ((int) ($row->takepos_intent_count ?? 0) !== 1 || (string) ($row->takepos_intent_status ?? '') !== 'SETTLED' || (int) ($row->takepos_intent_entity ?? 0) !== $entity || !$this->sameAmount($row->amount ?? '', $row->takepos_intent_amount ?? '')) $this->addCheck($checks, self::CODE_TAKEPOS_INTENT_MISMATCH, self::LEVEL_ERROR);
 		}
 		if ($isApply && $reversalCount > 1) $this->addCheck($checks, self::CODE_MULTIPLE_REVERSALS, self::LEVEL_ERROR);
 		if ($isReversal && empty($row->parent_settlement_exists)) $this->addCheck($checks, self::CODE_ORPHAN_REVERSAL, self::LEVEL_ERROR);
@@ -254,7 +260,7 @@ final class DoliVoucherSettlementDiagnosticService
 			self::CODE_GENERIC_COMPENSATION, self::CODE_ALLOCATION_INVOICE_MISMATCH, self::CODE_OPERATION_LINK_MISMATCH,
 			self::CODE_OPERATION_TYPE_MISMATCH, self::CODE_COMPENSATION_MISSING, self::CODE_PAYMENT_STILL_PRESENT,
 			self::CODE_INVOICE_REFERENCE_CHANGED, self::CODE_PAYMENT_REFERENCE_CHANGED, self::CODE_PAYMENT_EXPORTED,
-			self::CODE_PAYMENT_RECONCILED,
+			self::CODE_PAYMENT_RECONCILED, self::CODE_TAKEPOS_INTENT_MISSING, self::CODE_TAKEPOS_INTENT_MISMATCH,
 		);
 	}
 
@@ -315,6 +321,7 @@ final class DoliVoucherSettlementDiagnosticService
 		$sql .= ', c.generic_compensation_count, c.generic_compensation_id';
 		$sql .= ', ps.rowid AS parent_settlement_exists, ps.entity AS parent_entity, ps.event_type AS parent_event_type, ps.fk_operation AS parent_operation_id, ps.fk_voucher AS parent_voucher_id, ps.fk_facture AS parent_invoice_id, ps.amount AS parent_amount';
 		$sql .= ', u.login AS user_login, u.firstname AS user_firstname, u.lastname AS user_lastname';
+		$sql .= ', ti.takepos_intent_count, ti.takepos_intent_id, ti.takepos_intent_uuid, ti.takepos_intent_status, ti.takepos_intent_entity, ti.takepos_intent_amount';
 		$sql .= ' FROM '.$this->db->prefix().'dolivoucher_invoice_settlement s';
 		$sql .= ' LEFT JOIN '.$this->db->prefix().'dolivoucher_voucher v ON v.rowid=s.fk_voucher';
 		$sql .= ' LEFT JOIN '.$this->db->prefix().'dolivoucher_operation o ON o.rowid=s.fk_operation';
@@ -329,6 +336,7 @@ final class DoliVoucherSettlementDiagnosticService
 		$sql .= ' LEFT JOIN (SELECT co.reversal_of, COUNT(*) AS generic_compensation_count, MIN(co.rowid) AS generic_compensation_id FROM '.$this->db->prefix().'dolivoucher_operation co INNER JOIN '.$this->db->prefix().'dolivoucher_invoice_settlement sx ON sx.fk_operation=co.reversal_of AND sx.entity='.$entity.' WHERE co.reversal_of IS NOT NULL GROUP BY co.reversal_of) c ON c.reversal_of=s.fk_operation';
 		$sql .= ' LEFT JOIN '.$this->db->prefix().'dolivoucher_invoice_settlement ps ON ps.rowid=s.reversal_of';
 		$sql .= ' LEFT JOIN '.$this->db->prefix().'user u ON u.rowid=s.fk_user_creat';
+		$sql .= ' LEFT JOIN (SELECT fk_settlement, COUNT(*) AS takepos_intent_count, MIN(rowid) AS takepos_intent_id, MIN(intent_uuid) AS takepos_intent_uuid, MIN(status) AS takepos_intent_status, MIN(entity) AS takepos_intent_entity, MIN(amount) AS takepos_intent_amount FROM '.$this->db->prefix().'dolivoucher_takepos_intent WHERE entity='.$entity.' AND fk_settlement IS NOT NULL GROUP BY fk_settlement) ti ON ti.fk_settlement=s.rowid';
 		$sql .= ' WHERE s.entity='.$entity;
 		$sql .= $this->filterSql($filters);
 		$sql .= ' ORDER BY '.$orderBy.' '.$sortOrder.', s.rowid '.$sortOrder;

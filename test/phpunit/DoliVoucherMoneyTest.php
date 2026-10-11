@@ -37,4 +37,10 @@ final class DoliVoucherMoneyTest extends TestCase
 		self::assertSame(-1, DoliVoucherMoney::compare('0.00000001', '0.00000002'));
 		self::assertSame(0, DoliVoucherMoney::compare('100', '100.00000000'));
 	}
+
+	public function testAdditionNeverUsesFloat(): void
+	{
+		self::assertSame('10000.00000001', DoliVoucherMoney::add('9999.99999999', '0.00000002'));
+		self::assertSame('9007199254740993.00000000', DoliVoucherMoney::add('9007199254740992.99999999', '0.00000001'));
+	}
 }

@@ -46,7 +46,7 @@ Append-only Phase 3A bridge between one DoliVoucher operation, one voucher, one 
 
 Unique indexes enforce `(entity, settlement_uuid)`, `(entity, idempotency_key)`, one settlement per `fk_operation`, and one reversal per `reversal_of`. Entity-prefixed indexes cover invoice, payment, voucher and creation date. Foreign keys are limited to module-owned voucher, operation and self-reversal rows; native invoice/payment identifiers deliberately remain durable audit references without cascade deletion.
 
-The `DVOUCH` row in `llx_c_paiement` is an autonomous type-2 payment mode owned by the module. It creates no bank entry and is distinct from any payment code owned by another module.
+The `DVOUCH` row in `llx_c_paiement` is an inactive technical type-2 payment mode owned by the module. It is resolved explicitly by the settlement service, is not exposed by native payment selectors, creates no bank entry and remains distinct from any payment code owned by another module.
 
 Phase 3B adds no table, column or index. Diagnostics use the existing entity/date, UUID, idempotency, invoice, payment, voucher and operation indexes, analyze bounded batches and never materialize a second source of truth.
 
@@ -63,3 +63,6 @@ The exposure reconciliation aggregates each voucher's journal reconstruction und
 Indexes cover entity/status, references, third party, portfolio, voucher, operation type/UUID, dates, expiration and external reference. Entity compatibility is enforced in the service because cross-table composite foreign keys would conflict with Dolibarr entity-sharing practices.
 
 Phase 2 additionally indexes series references, generation keys, portfolio/status/year, sequence scope, material event UUID/revision/type/date, and event coverage. The replayable `llx_dolivoucher_voucher_phase2.sql` migration adds nullable `fk_series` without rewriting historical records or replacing Phase 1 unique constraints.
+# TakePOS technical intentions
+
+`llx_dolivoucher_takepos_intent` is a technical saga table, not a financial journal. It stores entity-scoped UUID and idempotency keys, a request fingerprint, invoice/voucher snapshots, requested amount, pre-validation payment/bank/payment-term snapshots, terminal/place context, settlement link, state, sanitized failure information and timestamps. Unique keys protect `(entity, intent_uuid)` and `(entity, idempotency_key)`; indexes cover invoice, voucher, settlement, status and creation date.

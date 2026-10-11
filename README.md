@@ -48,6 +48,14 @@ Phase 3B adds read-only settlement search, detail, reconciliation and CSV export
 
 Diagnostics never create, update, delete or repair business data. The audit right grants settlement list/card access; the separate restrictive diagnostic right grants global analysis, technical details and CSV export. See [settlement diagnostics](docs/settlement-diagnostics.md).
 
+## TakePOS integration
+
+Phase 4 provides an opt-in TakePOS integration. It first asks native TakePOS to validate the sale with `pay=delayed` and a zero amount, then verifies the persisted invoice before exclusively calling the Phase 3A settlement service. A persistent intention records every technical stage so a validated but unpaid sale can be diagnosed and retried without consuming a voucher twice. The integration is disabled by default and refuses activation when `TAKEPOS_DELAYED_TERMS` would alter payment terms.
+
+No DoliLnd, Fidelis or Dolibarr core file is changed. `DVOUCH` remains distinct from historical `BONACH`; no bank line or accounting entry is created. See [TakePOS integration](docs/takepos-integration.md).
+
+`DVOUCH` is a technical inactive payment dictionary entry: it is never meant to be selected through the native TakePOS payment buttons. The dedicated DoliVoucher action is the only supported cashier workflow.
+
 ## Boundaries
 
-No product, stock movement, discount, TakePOS integration, bank movement, accounting entry, VAT decision or SYSCOHADA mapping is created. Phase 3A creates a native invoice payment but deliberately leaves accounting mapping to a later validated phase. Material preparation or delivery is not financial activation or consumption.
+No product, module-created stock movement, discount, bank movement, accounting entry, VAT decision or SYSCOHADA mapping is created. TakePOS alone retains responsibility for its native sale validation and stock processing. Phase 3A creates a native invoice payment but deliberately leaves accounting mapping to a later validated phase. Material preparation or delivery is not financial activation or consumption.

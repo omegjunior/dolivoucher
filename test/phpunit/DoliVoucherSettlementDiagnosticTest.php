@@ -137,10 +137,15 @@ final class DoliVoucherSettlementDiagnosticTest extends TestCase
 		self::assertContains('ORPHAN_REVERSAL', $this->service->diagnoseRow($row, 1)['codes']);
 	}
 
-	public function testTakePosIsRecognizedButCreatesNoIntegration(): void
+	public function testTakePosRequiresOneSettledIntent(): void
 	{
 		$row = $this->activeRow();
 		$row->request_source = 'TAKEPOS';
+		self::assertContains('TAKEPOS_INTENT_MISSING', $this->service->diagnoseRow($row, 1)['codes']);
+		$row->takepos_intent_count = 1;
+		$row->takepos_intent_status = 'SETTLED';
+		$row->takepos_intent_entity = 1;
+		$row->takepos_intent_amount = $row->amount;
 		self::assertSame('OK', $this->service->diagnoseRow($row, 1)['level']);
 	}
 

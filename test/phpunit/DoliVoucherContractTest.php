@@ -367,7 +367,7 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_settlement_idempotency (entity, idempotency_key)', $schema);
 		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_settlement_operation (fk_operation)', $schema);
 		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_settlement_reversal (reversal_of)', $schema);
-		self::assertStringContainsString("'hooks' => array('invoicecard')", $descriptor);
+		self::assertStringContainsString("'invoicecard'", $descriptor);
 		self::assertStringContainsString("'settlement', 'use'", $descriptor);
 		self::assertStringContainsString("'settlement', 'reverse'", $descriptor);
 		self::assertStringContainsString("PAYMENT_CUSTOMER_DELETE", $trigger);
@@ -408,6 +408,44 @@ final class DoliVoucherContractTest extends TestCase
 		self::assertStringContainsString("'settlement', 'diagnose'", $descriptor);
 		self::assertStringContainsString("DOLIVOUCHER_DIAGNOSTIC_MAX_ROWS", $descriptor.$diagnostic.$export);
 		self::assertStringContainsString("SOURCE_TAKEPOS = 'TAKEPOS'", $this->read('class/dolivoucherinvoicesettlement.class.php'));
+		self::assertStringContainsString('class="liste_total"', $list);
+		self::assertStringContainsString("Totalforthispage", $list);
+		self::assertStringContainsString('class="liste_total"', $this->read('operation_list.php'));
+	}
+
+	public function testTakePosSagaIsModuleOnlyPersistentAndRecoverable(): void
+	{
+		$service = $this->read('class/dolivouchertakeposservice.class.php');
+		$intent = $this->read('class/dolivouchertakeposintent.class.php');
+		$endpoint = $this->read('ajax/takepos.php');
+		$javascript = $this->read('js/dolivoucher_takepos.js.php');
+		$schema = $this->read('sql/llx_dolivoucher_takepos_intent.sql').$this->read('sql/llx_dolivoucher_takepos_intent.key.sql');
+		$paymentMode = $this->read('sql/llx_c_paiement_dolivoucher.sql');
+		$descriptor = $this->read('core/modules/modDoliVoucher.class.php');
+		self::assertStringContainsString("STATUS_VALIDATION_REQUESTED = 'VALIDATION_REQUESTED'", $intent);
+		self::assertStringContainsString("STATUS_SETTLEMENT_FAILED = 'SETTLEMENT_FAILED'", $intent);
+		self::assertStringContainsString('request_fingerprint', $schema);
+		self::assertStringContainsString('UNIQUE INDEX uk_dolivoucher_takepos_idempotency', $schema);
+		self::assertStringContainsString('DoliVoucherInvoiceSettlementService', $service);
+		self::assertStringContainsString('SOURCE_TAKEPOS', $service);
+		self::assertStringNotContainsString('addPaymentToBank', $service);
+		self::assertStringNotContainsString('consumeVoucher(', $service);
+		self::assertStringContainsString("pay=delayed&amount=0", $javascript);
+		self::assertStringContainsString(".always(function () { setBusy(false); })", $javascript);
+		self::assertStringNotContainsString('.finally(', $javascript);
+		self::assertStringContainsString('dolivoucher-takepos-payment-modes', $javascript);
+		self::assertStringContainsString("parent.$('#poslines').load(refreshUrl", $javascript);
+		self::assertStringContainsString("?action=history&place=", $javascript);
+		self::assertStringContainsString("request('observe'", $javascript);
+		self::assertStringContainsString("parent.$('#invoiceid').val('')", $javascript);
+		self::assertStringContainsString('public function observeValidation(', $service);
+		self::assertStringContainsString('class="butAction"', $this->read('class/actions_dolivoucher.class.php'));
+		self::assertStringContainsString("ajax_constantonoff('DOLIVOUCHER_TAKEPOS_ENABLED'", $this->read('admin/setup.php'));
+		self::assertStringContainsString("REQUEST_METHOD'] !== 'POST'", $endpoint);
+		self::assertStringContainsString("'takepospay'", $descriptor);
+		self::assertStringContainsString('DOLIVOUCHER_TAKEPOS_ENABLED', $descriptor);
+		self::assertStringContainsString("'DVOUCH', 'Bon d''achat DoliVoucher', 2, 0, 'dolivoucher'", $paymentMode);
+		self::assertStringContainsString("AND module='dolivoucher'", $this->read('class/dolivoucherinvoicesettlementservice.class.php'));
 	}
 
 	private function read(string $relative): string

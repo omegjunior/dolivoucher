@@ -7,6 +7,7 @@ $res = @include '../../main.inc.php';
 if (!$res) die('Include of main fails');
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once __DIR__.'/class/dolivouchersettlementdiagnosticservice.class.php';
+require_once __DIR__.'/class/dolivouchermoney.class.php';
 require_once __DIR__.'/lib/dolivoucher_settlement_diagnostic.lib.php';
 
 $langs->loadLangs(array('bills', 'payments', 'dolivoucher@dolivoucher'));
@@ -93,8 +94,10 @@ foreach ($arrayfields as $key => $field) {
 }
 print_liste_field_titre($selectedfields, $_SERVER['PHP_SELF'], '', '', $param, '', '', '', 'maxwidthsearch center');
 print '</tr>';
+$pageAmountTotal = '0.00000000';
 foreach ($result['items'] as $item) {
 	$row = $item['record']; $diagnostic = $item['diagnostic'];
+	$pageAmountTotal = DoliVoucherMoney::add($pageAmountTotal, (string) $row->amount);
 	print '<tr class="oddeven">';
 	foreach ($arrayfields as $key => $field) {
 		if (empty($field['checked'])) continue;
@@ -115,5 +118,19 @@ foreach ($result['items'] as $item) {
 	print '<td></td></tr>';
 }
 if (!$result['items']) print '<tr class="oddeven"><td colspan="'.(count($arrayfields) + 1).'" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+elseif (!empty($arrayfields['s.amount']['checked'])) {
+	$totalLabelField = '';
+	foreach ($arrayfields as $key => $field) {
+		if (!empty($field['checked']) && $key !== 's.amount') { $totalLabelField = $key; break; }
+	}
+	print '<tr class="liste_total">';
+	foreach ($arrayfields as $key => $field) {
+		if (empty($field['checked'])) continue;
+		if ($key === 's.amount') print '<td class="right">'.price($pageAmountTotal, 0, $langs, 1, -1, -1, $conf->currency).'</td>';
+		elseif ($key === $totalLabelField) print '<td>'.$form->textwithpicto($langs->trans('Total'), $langs->transnoentitiesnoconv('Totalforthispage')).'</td>';
+		else print '<td></td>';
+	}
+	print '<td></td></tr>';
+}
 print '</table></div></form>';
 llxFooter();

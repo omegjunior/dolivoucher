@@ -30,6 +30,7 @@ print '<tr><td>'.$langs->trans('Date').'</td><td>'.dol_print_date($db->jdate($ro
 print '<tr><td>'.$langs->trans('Event').'</td><td>'.$langs->trans('Settlement'.$row->event_type).'</td></tr>';
 print '<tr><td>'.$langs->trans('SettlementState').'</td><td>'.$langs->trans('SettlementState'.dolivoucherSettlementState($row)).'</td></tr>';
 print '<tr><td>'.$langs->trans('RequestSource').'</td><td>'.dol_escape_htmltag($row->request_source).'</td></tr>';
+if ((string) $row->request_source === 'TAKEPOS') print '<tr><td>'.$langs->trans('TakePosIntent').'</td><td>'.(!empty($row->takepos_intent_id) ? dol_escape_htmltag($row->takepos_intent_uuid).' — '.dol_escape_htmltag($row->takepos_intent_status) : $langs->trans('TakePosIntentMissing')).'</td></tr>';
 if ($canDiagnose) print '<tr><td>'.$langs->trans('IdempotencyKey').'</td><td class="wordbreak">'.dol_escape_htmltag($row->idempotency_key).'</td></tr>';
 print '<tr><td>'.$langs->trans('Amount').'</td><td>'.price($row->amount, 0, $langs, 1, -1, -1, $conf->currency).'</td></tr>';
 print '<tr><td>'.$langs->trans('User').'</td><td>'.dol_escape_htmltag(trim((string) $row->user_firstname.' '.(string) $row->user_lastname).' ('.(string) $row->user_login.')').'</td></tr>';

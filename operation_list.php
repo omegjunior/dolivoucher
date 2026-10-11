@@ -7,6 +7,7 @@ $res = @include '../../main.inc.php';
 if (!$res) die('Include of main fails');
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once __DIR__.'/class/dolivoucheroperation.class.php';
+require_once __DIR__.'/class/dolivouchermoney.class.php';
 require_once __DIR__.'/lib/dolivoucher.lib.php';
 
 $langs->load('dolivoucher@dolivoucher');
@@ -166,8 +167,10 @@ print_liste_field_titre($selectedfields, $_SERVER['PHP_SELF'], '', '', $param, '
 print '</tr>';
 
 $count = 0;
+$pageAmountTotal = '0.00000000';
 while ($resql && ($row = $db->fetch_object($resql)) && $count < $limit) {
 	$count++;
+	$pageAmountTotal = DoliVoucherMoney::add($pageAmountTotal, (string) $row->amount);
 	print '<tr class="oddeven">';
 	if (!empty($arrayfields['o.date_operation']['checked'])) print '<td>'.dol_print_date($db->jdate($row->date_operation), 'dayhour').'</td>';
 	if (!empty($arrayfields['o.operation_uuid']['checked'])) print '<td>'.dol_escape_htmltag($row->operation_uuid).'</td>';
@@ -181,5 +184,19 @@ while ($resql && ($row = $db->fetch_object($resql)) && $count < $limit) {
 $columnCount = 1;
 foreach ($arrayfields as $field) if (!empty($field['checked'])) $columnCount++;
 if (!$count) print '<tr class="oddeven"><td colspan="'.$columnCount.'" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+elseif (!empty($arrayfields['o.amount']['checked'])) {
+	$totalLabelField = '';
+	foreach ($arrayfields as $key => $field) {
+		if (!empty($field['checked']) && $key !== 'o.amount') { $totalLabelField = $key; break; }
+	}
+	print '<tr class="liste_total">';
+	foreach ($arrayfields as $key => $field) {
+		if (empty($field['checked'])) continue;
+		if ($key === 'o.amount') print '<td class="right">'.price($pageAmountTotal, 0, $langs, 1, -1, -1, 'XOF').'</td>';
+		elseif ($key === $totalLabelField) print '<td>'.$form->textwithpicto($langs->trans('Total'), $langs->transnoentitiesnoconv('Totalforthispage')).'</td>';
+		else print '<td></td>';
+	}
+	print '<td></td></tr>';
+}
 print '</table></div></form>';
 llxFooter();

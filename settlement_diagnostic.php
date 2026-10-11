@@ -28,6 +28,13 @@ $levelOptions = array();
 foreach (DoliVoucherSettlementDiagnosticService::levels() as $level) $levelOptions[$level] = $langs->trans('DiagnosticLevel'.$level);
 $codeOptions = array();
 foreach (DoliVoucherSettlementDiagnosticService::codes() as $code) $codeOptions[$code] = $langs->trans('DiagnosticCode'.$code);
+$intentStatus = GETPOST('search_intent_status', 'alpha');
+$intentStatuses = array('DRAFT', 'VALIDATION_REQUESTED', 'INVOICE_VALIDATED', 'SETTLEMENT_REQUESTED', 'SETTLED', 'SETTLEMENT_FAILED', 'CANCELLED', 'EXPIRED');
+if (!in_array($intentStatus, $intentStatuses, true)) $intentStatus = '';
+$intentSql = 'SELECT ti.rowid,ti.intent_uuid,ti.status,ti.amount,ti.failure_code,ti.date_creation,ti.fk_settlement,ti.invoice_ref_snapshot,ti.voucher_ref_snapshot,s.rowid AS settlement_exists,f.status AS invoice_status';
+$intentSql .= ' FROM '.$db->prefix().'dolivoucher_takepos_intent ti LEFT JOIN '.$db->prefix().'dolivoucher_invoice_settlement s ON s.rowid=ti.fk_settlement AND s.entity=ti.entity LEFT JOIN '.$db->prefix().'facture f ON f.rowid=ti.fk_facture AND f.entity=ti.entity';
+$intentSql .= ' WHERE ti.entity='.$entity.($intentStatus !== '' ? " AND ti.status='".$db->escape($intentStatus)."'" : '').' ORDER BY ti.date_creation DESC'.$db->plimit($analysisLimit, 0);
+$intentResult = $db->query($intentSql);
 
 /* Views */
 llxHeader('', $langs->trans('SettlementDiagnostic'));
@@ -41,6 +48,7 @@ print '<tr><td>'.$langs->trans('Voucher').' / '.$langs->trans('Invoice').'</td><
 print '<tr><td>'.$langs->trans('Payment').' / '.$langs->trans('Operation').'</td><td><input name="search_payment" placeholder="'.$langs->trans('Payment').'" value="'.dol_escape_htmltag((string) $filters['payment']).'"> <input name="search_operation" placeholder="'.$langs->trans('Operation').'" value="'.dol_escape_htmltag((string) $filters['operation']).'"></td></tr>';
 print '<tr><td>'.$langs->trans('Amount').' / '.$langs->trans('AnalysisLimit').'</td><td><input class="maxwidth100" name="search_amount" value="'.dol_escape_htmltag((string) $filters['amount']).'"> <input type="number" min="1" max="'.$configuredMax.'" name="analysis_limit" value="'.$analysisLimit.'"> / '.$configuredMax.'</td></tr>';
 print '<tr><td>'.$langs->trans('DiagnosticStatus').' / '.$langs->trans('DiagnosticCode').'</td><td>'.$form->selectarray('search_level', $levelOptions, $filters['diagnostic_level'], 1).' '.$form->selectarray('search_code', $codeOptions, $filters['diagnostic_code'], 1, 0, 0, '', 0, 0, 0, '', 'maxwidth300').'</td></tr>';
+print '<tr><td>'.$langs->trans('TakePosIntentStatus').'</td><td>'.$form->selectarray('search_intent_status', array_combine($intentStatuses, $intentStatuses), $intentStatus, 1).'</td></tr>';
 print '</table><div class="center"><input type="submit" class="button button-search" value="'.$langs->trans('Analyze').'"> <a class="button" href="settlement_diagnostic.php">'.$langs->trans('RemoveFilter').'</a> <a class="button" href="settlement_diagnostic_export.php?'.dol_escape_htmltag(ltrim($param, '&')).'">'.$langs->trans('ExportCsv').'</a></div></form>';
 
 print '<div class="fichecenter"><table class="noborder centpercent"><tr class="liste_titre"><th>'.$langs->trans('AnalyzedSettlements').'</th><th>'.$langs->trans('DiagnosticLevelOK').'</th><th>'.$langs->trans('DiagnosticLevelWARNING').'</th><th>'.$langs->trans('DiagnosticLevelERROR').'</th></tr>';
@@ -58,5 +66,17 @@ foreach ($result['items'] as $item) {
 	print '<tr class="oddeven"><td>'.dol_print_date($db->jdate($row->date_creation), 'dayhour').'</td><td><a href="settlement_card.php?id='.(int) $row->rowid.'">'.dol_escape_htmltag($row->settlement_uuid).'</a></td><td>'.dol_escape_htmltag((string) ($row->voucher_ref ?: '#'.$row->fk_voucher)).'</td><td>'.dol_escape_htmltag((string) ($row->invoice_ref ?: $row->invoice_ref_snapshot)).'</td><td>'.dolivoucherDiagnosticBadge($diagnostic['level'], $langs).'</td><td>'.dol_escape_htmltag(implode(', ', array_diff($diagnostic['codes'], array(DoliVoucherSettlementDiagnosticService::CODE_OK)))).'</td></tr>';
 }
 if (!$result['items']) print '<tr class="oddeven"><td colspan="6" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
+print '</table></div>';
+print '<br>'.load_fiche_titre($langs->trans('TakePosIntents'), '', 'ticket');
+print '<div class="div-table-responsive"><table class="tagtable liste centpercent"><tr class="liste_titre"><th>'.$langs->trans('Date').'</th><th>'.$langs->trans('TakePosIntent').'</th><th>'.$langs->trans('Status').'</th><th>'.$langs->trans('Invoice').'</th><th>'.$langs->trans('Voucher').'</th><th>'.$langs->trans('Amount').'</th><th>'.$langs->trans('DiagnosticCode').'</th></tr>';
+$hasIntent = false;
+while ($intentResult && ($intent = $db->fetch_object($intentResult))) {
+	$hasIntent = true;
+	$issue = '';
+	if ($intent->status === 'SETTLED' && empty($intent->settlement_exists)) $issue = 'TAKEPOS_INTENT_MISMATCH';
+	elseif (in_array($intent->status, array('INVOICE_VALIDATED', 'SETTLEMENT_REQUESTED', 'SETTLEMENT_FAILED'), true) && empty($intent->settlement_exists)) $issue = 'TAKEPOS_INTENT_PENDING';
+	print '<tr class="oddeven"><td>'.dol_print_date($db->jdate($intent->date_creation), 'dayhour').'</td><td>'.dol_escape_htmltag($intent->intent_uuid).'</td><td>'.dol_escape_htmltag($intent->status).'</td><td>'.dol_escape_htmltag($intent->invoice_ref_snapshot).'</td><td>'.dol_escape_htmltag($intent->voucher_ref_snapshot).'</td><td class="right">'.price($intent->amount).'</td><td>'.dol_escape_htmltag($issue ?: (string) $intent->failure_code).'</td></tr>';
+}
+if (!$hasIntent) print '<tr class="oddeven"><td colspan="7" class="opacitymedium">'.$langs->trans('None').'</td></tr>';
 print '</table></div>';
 llxFooter();

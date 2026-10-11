@@ -10,16 +10,28 @@ if (getenv('DOLIVOUCHER_PHASE3_NATIVE') !== '1') {
 
 if (!defined('SYSLOG_FILE_NO_ERROR')) define('SYSLOG_FILE_NO_ERROR', true);
 
+// The real TakePOS controller reads its request after main.inc.php has initialized Dolibarr.
+// Seed the worker request before loading master.inc.php so GETPOST() sees the same values as an HTTP request.
+if (($argv[1] ?? '') === 'takepos-delayed') {
+	$_GET = $_POST = array('action' => 'valid', 'pay' => 'delayed', 'amount' => '0', 'invoiceid' => (string) ($argv[3] ?? 0), 'place' => '1');
+	$_REQUEST = $_GET;
+	$_SERVER['REQUEST_METHOD'] = 'GET';
+	$_SERVER['SERVER_PROTOCOL'] = 'HTTP/1.1';
+}
+
 require_once dirname(__DIR__, 3).'/master.inc.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/compta/facture/class/facture.class.php';
 require_once DOL_DOCUMENT_ROOT.'/compta/paiement/class/paiement.class.php';
+require_once DOL_DOCUMENT_ROOT.'/product/class/product.class.php';
+require_once DOL_DOCUMENT_ROOT.'/product/stock/class/entrepot.class.php';
 require_once dirname(__DIR__).'/core/modules/modDoliVoucher.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherportfolio.class.php';
 require_once dirname(__DIR__).'/class/dolivouchervoucher.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherservice.class.php';
 require_once dirname(__DIR__).'/class/dolivoucherinvoicesettlementservice.class.php';
 require_once dirname(__DIR__).'/class/dolivouchersettlementdiagnosticservice.class.php';
+require_once dirname(__DIR__).'/class/dolivouchertakeposservice.class.php';
 
 /** @throws RuntimeException */
 function p3Expect(bool $condition, string $message): void
@@ -42,11 +54,19 @@ function p3ConfigureRuntime(): void
 	$conf->entity = 1;
 	$conf->currency = 'XOF';
 	// Isolate native triggers from unrelated custom modules enabled in the developer database.
-	$conf->modules = array('facture' => 1, 'dolivoucher' => 1);
+	$conf->modules = array('facture' => 1, 'stock' => 1, 'productbatch' => 1, 'dolivoucher' => 1);
 	$conf->dolivoucher = new stdClass();
 	$conf->dolivoucher->enabled = 1;
+	$conf->productbatch = new stdClass();
+	$conf->productbatch->enabled = 1;
 	$conf->global->MAIN_MODULE_DOLIVOUCHER = 1;
 	$conf->global->MAIN_DISABLE_PDF_AUTOUPDATE = 0;
+	$conf->global->MAIN_USE_ADVANCED_PERMS = 0;
+	$conf->global->DOLIVOUCHER_TAKEPOS_ENABLED = 1;
+	$conf->global->DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE = 10;
+	$conf->global->DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES = 30;
+	$conf->global->TAKEPOS_NUM_TERMINALS = 1;
+	$conf->global->FACTURE_ADDON = 'mod_facture_terre';
 }
 
 /** Load one official installer SQL file while preserving newlines required by inline SQL comments. */
@@ -153,6 +173,101 @@ function p3FinishWorker(array $worker): array
 	return array('exit' => $exit, 'output' => trim((string) $output), 'error' => trim((string) $error));
 }
 
+/** @param string[] $arguments @return array{resource,resource,resource,resource} */
+function p4StartWorker(string $mode, string $databaseName, array $arguments): array
+{
+	$command = escapeshellarg(PHP_BINARY).' '.escapeshellarg(__FILE__).' '.escapeshellarg($mode).' '.escapeshellarg($databaseName);
+	foreach ($arguments as $argument) $command .= ' '.escapeshellarg($argument);
+	$descriptors = array(0 => array('pipe', 'r'), 1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
+	$process = proc_open($command, $descriptors, $pipes, dirname(__DIR__));
+	p3Expect(is_resource($process), 'Cannot start Phase 4 worker '.$mode);
+	fclose($pipes[0]);
+	return array($process, $pipes[1], $pipes[2], $pipes[0] ?? null);
+}
+
+/** Create a real TakePOS draft invoice containing one stocked product. @return array{invoice:int,product:int,warehouse:int,stock:string,ref:string} */
+function p4TakePosDraft(DoliDB $database, User $user, int $socid, string $suffix, string $quantity = '2', bool $batch = false): array
+{
+	global $conf;
+	$warehouse = new Entrepot($database);
+	$warehouse->ref = 'P4-WH-'.$suffix;
+	$warehouse->label = 'Phase 4 warehouse '.$suffix;
+	$warehouse->statut = Entrepot::STATUS_OPEN_ALL;
+	$warehouseId = $warehouse->create($user);
+	p3Expect($warehouseId > 0, 'Cannot create Phase 4 warehouse: '.$warehouse->error);
+	$product = new Product($database);
+	$product->ref = 'P4-PROD-'.$suffix;
+	$product->label = 'Phase 4 product '.$suffix;
+	$product->status = 1;
+	$product->status_buy = 1;
+	$product->type = Product::TYPE_PRODUCT;
+	$productId = $product->create($user);
+	p3Expect($productId > 0, 'Cannot create Phase 4 product: '.$product->error);
+	if ($batch) {
+		$product->status_batch = 1;
+		p3Expect((bool) $database->query('UPDATE '.$database->prefix().'product SET tobatch=1 WHERE rowid='.$productId), 'Cannot enable Phase 4 batch product');
+		p3Expect($product->correct_stock_batch($user, $warehouseId, 20, 0, 'Phase 4 batch opening stock', 0, '', '', 'LOT-'.$suffix) > 0, 'Cannot seed Phase 4 batch stock');
+	} else {
+		p3Expect($product->correct_stock($user, $warehouseId, 20, 0, 'Phase 4 opening stock') > 0, 'Cannot seed Phase 4 stock');
+	}
+	$invoice = new Facture($database);
+	$invoice->socid = $socid;
+	$invoice->date = dol_now();
+	$invoice->type = Facture::TYPE_STANDARD;
+	$invoice->module_source = 'takepos';
+	$invoice->pos_source = '1';
+	$invoiceId = $invoice->create($user);
+	p3Expect($invoiceId > 0, 'Cannot create TakePOS draft: '.$invoice->error);
+	p3Expect($invoice->addline('Phase 4 product '.$suffix, 1000, (float) $quantity, 0, 0, 0, $productId) > 0, 'Cannot add TakePOS line: '.$invoice->error);
+	$database->query('UPDATE '.$database->prefix().'facturedet SET fk_warehouse='.$warehouseId.' WHERE fk_facture='.$invoiceId);
+	if ($batch) p3Expect((bool) $database->query("UPDATE ".$database->prefix()."facturedet SET batch='LOT-".$database->escape($suffix)."' WHERE fk_facture=".$invoiceId), 'Cannot assign Phase 4 invoice batch');
+	$conf->global->CASHDESK_ID_WAREHOUSE1 = $warehouseId;
+	$stock = (string) p3One($database, 'SELECT reel AS amount FROM '.$database->prefix().'product_stock WHERE fk_product='.$productId.' AND fk_entrepot='.$warehouseId)->amount;
+	return array('invoice' => $invoiceId, 'product' => $productId, 'warehouse' => $warehouseId, 'stock' => $stock, 'ref' => (string) $invoice->ref);
+}
+
+if (($argv[1] ?? '') === 'takepos-authorize') {
+	$workerDatabase = (string) ($argv[2] ?? '');
+	if (!preg_match('/^dolivoucher_phase3_native_[0-9]{14}_[a-f0-9]{6}$/', $workerDatabase)) exit(91);
+	p3Expect((bool) $db->query('USE `'.$workerDatabase.'`'), 'Worker cannot select database');
+	p3ConfigureRuntime();
+	$user->fetch(1); $user->admin = 1;
+	$service = new DoliVoucherTakePosService($db);
+	$result = $service->authorize((string) ($argv[3] ?? ''), '1', $user, 1);
+	echo json_encode(array('ok' => (bool) $result, 'native' => !empty($result->native_validation_required), 'status' => $result->status ?? '', 'error' => $service->error));
+	exit($result ? 0 : 3);
+}
+
+if (($argv[1] ?? '') === 'takepos-delayed') {
+	$workerDatabase = (string) ($argv[2] ?? '');
+	if (!preg_match('/^dolivoucher_phase3_native_[0-9]{14}_[a-f0-9]{6}$/', $workerDatabase)) exit(91);
+	p3Expect((bool) $db->query('USE `'.$workerDatabase.'`'), 'Worker cannot select database');
+	p3ConfigureRuntime();
+	$conf->modules['stock'] = 1;
+	$conf->modules['productbatch'] = (($argv[5] ?? '') === 'batch' ? 1 : 0);
+	$conf->productbatch->enabled = (($argv[5] ?? '') === 'batch' ? 1 : 0);
+	$conf->global->CASHDESK_ID_WAREHOUSE1 = (int) ($argv[4] ?? 0);
+	$conf->global->STOCK_CALCULATE_ON_BILL = 1;
+	$user->fetch(1); $user->admin = 1;
+	if (!isset($user->rights->facture)) $user->rights->facture = new stdClass();
+	$user->rights->facture->creer = 1;
+	if (!isset($user->rights->takepos)) $user->rights->takepos = new stdClass();
+	$user->rights->takepos->run = 1;
+	$_SESSION['takeposterminal'] = '1';
+	$_GET = $_POST = array('action' => 'valid', 'pay' => 'delayed', 'amount' => '0', 'invoiceid' => (string) ($argv[3] ?? 0), 'place' => '1');
+	$_REQUEST = $_GET;
+	$_SERVER['REQUEST_METHOD'] = 'GET';
+	$_SERVER['SERVER_PROTOCOL'] = 'HTTP/1.1';
+	if (!defined('INCLUDE_PHONEPAGE_FROM_PUBLIC_PAGE')) define('INCLUDE_PHONEPAGE_FROM_PUBLIC_PAGE', true);
+	if (!function_exists('top_htmlhead')) { function top_htmlhead($head = '', $title = '', $disablejs = 0, $disablehead = 0, $arrayofjs = array(), $arrayofcss = array()) { } }
+	ob_start();
+	include DOL_DOCUMENT_ROOT.'/takepos/invoice.php';
+	$output = ob_get_clean();
+	$workerInvoice = new Facture($db); $workerInvoice->fetch((int) ($argv[3] ?? 0));
+	echo json_encode(array('action' => $action ?? '', 'right_invoice_create' => $user->hasRight('facture', 'creer'), 'invoice_status' => (int) $workerInvoice->status, 'invoice_ref' => (string) $workerInvoice->ref, 'output_head' => substr(strip_tags((string) $output), 0, 800), 'output_tail' => substr(strip_tags((string) $output), -500)));
+	exit(0);
+}
+
 if (($argv[1] ?? '') === 'worker') {
 	$workerDatabase = (string) ($argv[2] ?? '');
 	if (!preg_match('/^dolivoucher_phase3_native_[0-9]{14}_[a-f0-9]{6}$/', $workerDatabase)) exit(91);
@@ -181,6 +296,13 @@ class DoliVoucherFailingSettlementService extends DoliVoucherInvoiceSettlementSe
 	{
 		if ($point === $this->failurePoint) throw new RuntimeException('TEST_FAILURE_'.$point);
 	}
+}
+
+class DoliVoucherFailingTakePosService extends DoliVoucherTakePosService
+{
+	private string $failurePoint;
+	public function __construct(DoliDB $database, string $failurePoint) { parent::__construct($database); $this->failurePoint = $failurePoint; }
+	protected function checkpoint(string $point): void { if ($point === $this->failurePoint) throw new RuntimeException('TEST_FAILURE_'.$point); }
 }
 
 global $conf, $db, $user;
@@ -223,9 +345,12 @@ try {
 	p3Expect($module->init('') > 0, 'DoliVoucher normal installation failed');
 	p3Expect($module->init('') > 0, 'DoliVoucher replay installation failed');
 	$tableCount = (int) p3One($db, "SELECT COUNT(*) AS amount FROM information_schema.tables WHERE table_schema='".$db->escape($databaseName)."' AND table_name LIKE 'llx_dolivoucher_%'")->amount;
-	p3Expect($tableCount === 8, 'Expected eight DoliVoucher tables, got '.$tableCount); $assertions++;
-	p3Expect((int) p3One($db, "SELECT COUNT(*) AS amount FROM llx_c_paiement WHERE entity=1 AND code='DVOUCH'")->amount === 1, 'DVOUCH missing or duplicated'); $assertions++;
+	p3Expect($tableCount === 9, 'Expected nine DoliVoucher tables, got '.$tableCount); $assertions++;
+	p3Expect((int) p3One($db, "SELECT COUNT(*) AS amount FROM llx_c_paiement WHERE entity=1 AND code='DVOUCH' AND active=0 AND module='dolivoucher'")->amount === 1, 'Technical DVOUCH mode missing, duplicated or exposed as a native payment choice'); $assertions++;
 	p3Expect((int) p3One($db, "SELECT COUNT(*) AS amount FROM llx_c_paiement WHERE code='BONACH'")->amount === 0, 'Unexpected BONACH collision'); $assertions++;
+	$conf->global->DOLIVOUCHER_TAKEPOS_ENABLED = 1;
+	$conf->global->DOLIVOUCHER_TAKEPOS_MAX_VOUCHERS_PER_SALE = 10;
+	$conf->global->DOLIVOUCHER_TAKEPOS_INTENT_TTL_MINUTES = 30;
 
 	$voucherService = new DoliVoucherService($db);
 	$portfolio = new DoliVoucherPortfolio($db);
@@ -234,6 +359,82 @@ try {
 	$portfolio->type = DoliVoucherPortfolio::TYPE_DONATION;
 	$portfolioId = $portfolio->create($user, 1);
 	p3Expect($portfolioId > 0 && $voucherService->validatePortfolio($portfolioId, 1, $user) > 0 && $voucherService->fundPortfolio($portfolioId, 1, '1000000', $user, 'Phase 3 funding') > 0, 'Portfolio setup failed');
+
+	// Phase 4: two independent authorizations race on one draft; only one may authorize native validation.
+	$takePosDraft = p4TakePosDraft($db, $user, 10, 'AUTH');
+	$takePosVoucher = p3Voucher($db, $voucherService, $user, $portfolioId, 'P4-V-AUTH', '5000');
+	$takePosService = new DoliVoucherTakePosService($db);
+	$intent = $takePosService->prepare($takePosDraft['invoice'], 'P4-V-AUTH', '2000', DoliVoucherService::uuid(), '1', '1', $user, 1);
+	p3Expect((bool) $intent && $intent->status === DoliVoucherTakePosIntent::STATUS_DRAFT, 'Phase 4 intent preparation failed: '.$takePosService->error); $assertions++;
+	$authorizeA = p4StartWorker('takepos-authorize', $databaseName, array((string) $intent->intent_uuid));
+	$authorizeB = p4StartWorker('takepos-authorize', $databaseName, array((string) $intent->intent_uuid));
+	$authorizeResults = array(p3FinishWorker($authorizeA), p3FinishWorker($authorizeB));
+	$nativeAuthorizations = 0;
+	foreach ($authorizeResults as $result) { $payload = json_decode($result['output'], true); p3Expect(is_array($payload) && !empty($payload['ok']), 'Concurrent authorization worker failed: '.$result['error']); if (!empty($payload['native'])) $nativeAuthorizations++; }
+	p3Expect($nativeAuthorizations === 1, 'Exactly one concurrent native validation authorization was expected'); $assertions++;
+	$authorizedIntent = p3One($db, 'SELECT * FROM llx_dolivoucher_takepos_intent WHERE rowid='.(int) $intent->rowid);
+	p3Expect($authorizedIntent->status === 'VALIDATION_REQUESTED', 'Concurrent authorization did not persist VALIDATION_REQUESTED'); $assertions++;
+	$delayed = p4StartWorker('takepos-delayed', $databaseName, array((string) $takePosDraft['invoice'], (string) $takePosDraft['warehouse']));
+	$delayedResult = p3FinishWorker($delayed);
+	p3Expect($delayedResult['exit'] === 0, 'Native delayed validation failed: '.$delayedResult['error'].' / '.$delayedResult['output']); $assertions++;
+	$validated = p3One($db, 'SELECT ref,fk_statut,fk_cond_reglement FROM llx_facture WHERE rowid='.(int) $takePosDraft['invoice']);
+	$stockAfterValidation = (string) p3One($db, 'SELECT reel AS amount FROM llx_product_stock WHERE fk_product='.(int) $takePosDraft['product'].' AND fk_entrepot='.(int) $takePosDraft['warehouse'])->amount;
+	p3Expect((int) $validated->fk_statut === Facture::STATUS_VALIDATED && (string) $validated->ref !== $takePosDraft['ref'], 'Native delayed did not validate/number invoice: '.$delayedResult['output'].' db='.json_encode($validated)); $assertions++;
+	p3Expect(DoliVoucherMoney::compare($stockAfterValidation, '18') === 0, 'Native delayed stock was not decremented exactly once'); $assertions++;
+	p3Expect((int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_paiement')->amount === 0 && (int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_paiement_facture')->amount === 0 && (int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_bank')->amount === 0, 'Native delayed created payment/allocation/bank'); $assertions++;
+	$repeatAuthorization = $takePosService->authorize((string) $intent->intent_uuid, '1', $user, 1);
+	p3Expect((bool) $repeatAuthorization && empty($repeatAuthorization->native_validation_required) && $repeatAuthorization->status === 'INVOICE_VALIDATED', 'Validated invoice was reauthorized for native validation'); $assertions++;
+	p3Expect($takePosService->settle((string) $intent->intent_uuid, '1', $user, 1) !== null, 'Phase 4 settlement failed: '.$takePosService->error); $assertions++;
+	$settledIntent = p3One($db, 'SELECT * FROM llx_dolivoucher_takepos_intent WHERE rowid='.(int) $intent->rowid);
+	p3Expect($settledIntent->status === 'SETTLED' && (int) $settledIntent->fk_settlement > 0, 'Phase 4 intent not finalized'); $assertions++;
+	p3Expect((int) p3One($db, "SELECT COUNT(*) AS amount FROM llx_dolivoucher_invoice_settlement WHERE rowid=".(int) $settledIntent->fk_settlement." AND request_source='TAKEPOS'")->amount === 1, 'Canonical TAKEPOS settlement missing'); $assertions++;
+	p3Expect((int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_bank')->amount === 0, 'Phase 4 settlement created a bank line'); $assertions++;
+	$settledRepeat = $takePosService->settle((string) $intent->intent_uuid, '1', $user, 1);
+	p3Expect((bool) $settledRepeat && (int) $settledRepeat->fk_settlement === (int) $settledIntent->fk_settlement, 'Settled intention was duplicated'); $assertions++;
+	p3Expect(DoliVoucherMoney::compare((string) p3One($db, 'SELECT reel AS amount FROM llx_product_stock WHERE fk_product='.(int) $takePosDraft['product'].' AND fk_entrepot='.(int) $takePosDraft['warehouse'])->amount, '18') === 0, 'Stock changed after repeated saga calls'); $assertions++;
+
+	// Phase 4: batch stock is changed once because a second authorization never reaches native TakePOS.
+	$batchDraft = p4TakePosDraft($db, $user, 10, 'BATCH', '3', true);
+	$batchVoucher = p3Voucher($db, $voucherService, $user, $portfolioId, 'P4-V-BATCH', '5000');
+	$batchIntent = $takePosService->prepare($batchDraft['invoice'], 'P4-V-BATCH', '3000', DoliVoucherService::uuid(), '1', '1', $user, 1);
+	$batchAuthorization = $takePosService->authorize((string) $batchIntent->intent_uuid, '1', $user, 1);
+	p3Expect((bool) $batchAuthorization && !empty($batchAuthorization->native_validation_required), 'Batch native validation was not authorized'); $assertions++;
+	$batchSecondAuthorization = $takePosService->authorize((string) $batchIntent->intent_uuid, '1', $user, 1);
+	p3Expect((bool) $batchSecondAuthorization && empty($batchSecondAuthorization->native_validation_required), 'Batch native validation was authorized twice'); $assertions++;
+	$batchDelayed = p4StartWorker('takepos-delayed', $databaseName, array((string) $batchDraft['invoice'], (string) $batchDraft['warehouse'], 'batch'));
+	$batchDelayedResult = p3FinishWorker($batchDelayed);
+	p3Expect($batchDelayedResult['exit'] === 0, 'Batch delayed validation failed: '.$batchDelayedResult['error'].' / '.$batchDelayedResult['output']); $assertions++;
+	$batchQuantity = (string) p3One($db, "SELECT pb.qty AS amount FROM llx_product_batch pb INNER JOIN llx_product_stock ps ON ps.rowid=pb.fk_product_stock WHERE ps.fk_product=".(int) $batchDraft['product']." AND ps.fk_entrepot=".(int) $batchDraft['warehouse']." AND pb.batch='LOT-BATCH'")->amount;
+	$batchLine = p3One($db, 'SELECT batch,fk_warehouse FROM llx_facturedet WHERE fk_facture='.(int) $batchDraft['invoice']);
+	$batchMovements = (int) p3One($db, 'SELECT COUNT(*) AS amount FROM llx_stock_mouvement WHERE fk_product='.(int) $batchDraft['product'])->amount;
+	$batchMovementDetails = p3One($db, "SELECT GROUP_CONCAT(CONCAT(value, ':', COALESCE(batch, 'NULL')) ORDER BY rowid SEPARATOR ',') AS details FROM llx_stock_mouvement WHERE fk_product=".(int) $batchDraft['product'])->details;
+	$batchStockDetails = p3One($db, "SELECT GROUP_CONCAT(CONCAT(pb.batch, ':', pb.qty) ORDER BY pb.rowid SEPARATOR ',') AS details FROM llx_product_batch pb INNER JOIN llx_product_stock ps ON ps.rowid=pb.fk_product_stock WHERE ps.fk_product=".(int) $batchDraft['product'])->details;
+	p3Expect(DoliVoucherMoney::compare($batchQuantity, '17') === 0, 'Batch stock was not decremented exactly once (qty='.$batchQuantity.', line='.json_encode($batchLine).', movements='.$batchMovements.'/'.$batchMovementDetails.', batches='.$batchStockDetails.', worker='.$batchDelayedResult['output'].')'); $assertions++;
+	p3Expect($takePosService->settle((string) $batchIntent->intent_uuid, '1', $user, 1) !== null, 'Batch TakePOS settlement failed: '.$takePosService->error); $assertions++;
+	p3Expect(DoliVoucherMoney::compare((string) p3One($db, "SELECT pb.qty AS amount FROM llx_product_batch pb INNER JOIN llx_product_stock ps ON ps.rowid=pb.fk_product_stock WHERE ps.fk_product=".(int) $batchDraft['product']." AND ps.fk_entrepot=".(int) $batchDraft['warehouse']." AND pb.batch='LOT-BATCH'")->amount, '17') === 0, 'Batch stock changed during settlement/reconciliation'); $assertions++;
+
+	// Phase 4: already validated invoice skips native validation and settles directly.
+	$alreadyInvoice = p3Invoice($db, 10, 1, 'P4-ALREADY', '3000');
+	$db->query("UPDATE llx_facture SET module_source='takepos',pos_source='1' WHERE rowid=".$alreadyInvoice);
+	$alreadyVoucher = p3Voucher($db, $voucherService, $user, $portfolioId, 'P4-V-ALREADY', '3000');
+	$alreadyIntent = $takePosService->prepare($alreadyInvoice, 'P4-V-ALREADY', '1000', DoliVoucherService::uuid(), '1', '1', $user, 1);
+	$alreadyAuthorization = $takePosService->authorize((string) $alreadyIntent->intent_uuid, '1', $user, 1);
+	p3Expect((bool) $alreadyAuthorization && empty($alreadyAuthorization->native_validation_required) && $alreadyAuthorization->status === 'INVOICE_VALIDATED', 'Already validated TakePOS invoice requested native validation'); $assertions++;
+	p3Expect($takePosService->settle((string) $alreadyIntent->intent_uuid, '1', $user, 1) !== null, 'Direct settlement of validated TakePOS invoice failed'); $assertions++;
+
+	// Phase 4: failure after apply is recovered from the canonical settlement without duplication.
+	$recoveryInvoice = p3Invoice($db, 10, 1, 'P4-RECOVER', '4000');
+	$db->query("UPDATE llx_facture SET module_source='takepos',pos_source='1' WHERE rowid=".$recoveryInvoice);
+	$recoveryVoucher = p3Voucher($db, $voucherService, $user, $portfolioId, 'P4-V-RECOVER', '4000');
+	$recoveryIntent = $takePosService->prepare($recoveryInvoice, 'P4-V-RECOVER', '2000', DoliVoucherService::uuid(), '1', '1', $user, 1);
+	$takePosService->authorize((string) $recoveryIntent->intent_uuid, '1', $user, 1);
+	$failingTakePos = new DoliVoucherFailingTakePosService($db, 'after_apply');
+	p3Expect($failingTakePos->settle((string) $recoveryIntent->intent_uuid, '1', $user, 1) === null, 'Injected post-apply failure did not fail'); $assertions++;
+	$recoveryLinkCount = (int) p3One($db, "SELECT COUNT(*) AS amount FROM llx_dolivoucher_invoice_settlement s INNER JOIN llx_dolivoucher_takepos_intent ti ON ti.settlement_key=s.idempotency_key WHERE ti.rowid=".(int) $recoveryIntent->rowid)->amount;
+	p3Expect($recoveryLinkCount === 1, 'Post-apply failure left no recoverable settlement'); $assertions++;
+	$recovered = $takePosService->settle((string) $recoveryIntent->intent_uuid, '1', $user, 1);
+	p3Expect((bool) $recovered && $recovered->status === 'SETTLED' && (int) $recovered->fk_settlement > 0, 'Existing settlement was not reconciled'); $assertions++;
+	p3Expect((int) p3One($db, "SELECT COUNT(*) AS amount FROM llx_dolivoucher_invoice_settlement s INNER JOIN llx_dolivoucher_takepos_intent ti ON ti.settlement_key=s.idempotency_key WHERE ti.rowid=".(int) $recoveryIntent->rowid)->amount === 1, 'Recovery duplicated settlement'); $assertions++;
 
 	$settlementService = new DoliVoucherInvoiceSettlementService($db);
 	$totalInvoice = p3Invoice($db, 10, 1, 'P3-TOTAL', '10000');

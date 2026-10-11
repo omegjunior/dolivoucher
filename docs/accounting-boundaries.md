@@ -6,8 +6,13 @@ Phase 2 series generation, PDF printing, physical preparation and delivery are a
 
 Phase 3A creates a native Dolibarr customer payment and allocation so the invoice remainder, payment lists and mixed settlements stay native. It uses the dedicated `DVOUCH` payment mode and creates no bank line or fictitious bank account. The payment is a representation of voucher coverage, not a second debit of the voucher; the DoliVoucher CONSUME operation remains the subledger movement.
 
+`DVOUCH` is installed as an inactive technical dictionary entry. It is resolved explicitly by the DoliVoucher settlement service but is not offered by native payment selectors or TakePOS. This prevents a native TakePOS payment from bypassing voucher identification and the saga, even if a legacy `CASHDESK_ID_BANKACCOUNT_DVOUCH*` constant exists.
+
 It creates no Dolibarr product for face value, stock movement, quotation discount, negative quotation line, bank account, accounting entry or TakePOS integration. The printed support remains distinct from the voucher face value. No SYSCOHADA account, revenue-recognition rule, VAT timing or accounting export mapping is inferred. Payments already banked, reconciled or exported cannot be reversed by Phase 3A.
 
 Future TakePOS and accounting adapters must reuse the settlement service, remain independently authorized and idempotent, and preserve both append-only journals rather than rewriting them.
 
 Phase 3B is observational only. Its diagnostic service and CSV export never create a payment, allocation, bank line, journal operation, accounting entry, compensation or repair. A diagnostic warning or error is a support signal, not an accounting adjustment instruction.
+# TakePOS
+
+The TakePOS integration validates the sale through native delayed validation and then creates the same unbanked `DVOUCH` customer payment used by Phase 3A. DoliVoucher does not create a cash, card or bank receipt, bank line, accounting entry or SYSCOHADA mapping. Its technical intention is not an accounting record. `BONACH` and its bank/accounting configuration are never reused.

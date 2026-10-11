@@ -34,7 +34,7 @@ The validation-only hook `beforeDoliVoucherInvoiceSettlement` in context `dolivo
 
 ## Extension points
 
-Future TakePOS integration must call the Phase 3A settlement service with a future controlled request source rather than implementing another consumption engine. Accounting integration may map the `DVOUCH` payment mode only after explicit SYSCOHADA/TVA decisions. No core override is installed; invoice UI integration uses the native `invoicecard` hook and deletion integrity uses a module trigger.
+The TakePOS integration calls the Phase 3A settlement service with the controlled `TAKEPOS` request source rather than implementing another consumption engine. Accounting integration may map the inactive technical `DVOUCH` payment mode only after explicit SYSCOHADA/TVA decisions. No core override is installed; invoice UI integration uses the native `invoicecard` hook and deletion integrity uses a module trigger.
 
 ## Read-only settlement diagnostics
 
@@ -53,3 +53,8 @@ Generated vouchers reuse `ref` as the business serial, copy it into `barcode`, k
 PDF generation uses Dolibarr's bundled TCPDF with Code 128. The series row remains locked while the revision is allocated, the file is produced and hashed, the event and voucher-event lines are inserted, and coverage is refreshed. The event is inserted only after a non-empty file exists. Any SQL failure rolls back and removes that exact newly-created file. Document downloads recheck entity and rights and verify that the resolved path stays under the module output directory.
 
 First print, first-print complement and reprint are distinct events. A request mixing previously printed and never-printed vouchers is rejected. Preparation and delivery currently apply to the complete series only, which provides exact traceability without pretending to support partial delivery.
+# Phase 4 TakePOS saga
+
+The module-only integration uses the `takepospay` context and `addMoreActionsButtons`/`completePayment`. `DoliVoucherTakePosService` persists an intention, authorizes a single native `action=valid&pay=delayed&amount=0` request, verifies the resulting TakePOS invoice and calls only `DoliVoucherInvoiceSettlementService::apply()` with source `TAKEPOS`. The global boundary is a saga: native validation and stock commit first, followed by the atomic Phase 3A payment/consumption transaction.
+
+Intent states are `DRAFT`, `VALIDATION_REQUESTED`, `INVOICE_VALIDATED`, `SETTLEMENT_REQUESTED`, `SETTLED`, `SETTLEMENT_FAILED`, `CANCELLED` and `EXPIRED`. Idempotency fingerprints bind entity, invoice, voucher, amount, terminal/place and user. No financial repair is automatic.
